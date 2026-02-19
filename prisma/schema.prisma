@@ -1,0 +1,141 @@
+// ============================================
+// 正缘引力 - 数据库模型定义 v2.1
+// 变更：emotionCoins→lingxi, coinsCost→lingxiCost
+// 新增：planType, coupleToken, partnerId, expiresAt, PaymentOrder
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * 卡密表 - 存储每张激活码的生命周期状态
+ * planType 决定初始灵犀次数：personal=3 / couple=8 / gift=15
+ */
+model CardKey {
+  id          String     @id @default(cuid())
+  /// 激活码本体，格式：XXXX-XXXX-XXXX-XXXX
+  code        String     @unique
+  /// 状态机：unused → activated（绑定手机号）→ used（已完成测试）| banned（已封禁）
+  status      String     @default("unused")
+  /// 版本类型：personal（个人版）| couple（双人版）| gift（礼盒版）
+  planType    String     @default("personal")
+  /// 绑定的手机号，激活时填写，防止一号多测
+  phone       String?
+  /// 设备指纹（IP + UserAgent 的哈希），用于异常检测
+  deviceInfo  String?
+  /// 所属批次 ID，便于追溯是哪一批发出的
+  batchId     String?
+  batch       CardBatch? @relation(fields: [batchId], references: [id])
+  activatedAt DateTime?
+  usedAt      DateTime?
+  result      Result?
+  createdAt   DateTime   @default(now())
+
+  @@index([status])
+  @@index([phone])
+  @@index([batchId])
+}
+
+/**
+ * 测试结果表 - 存储用户的完整测试结果和灵犀次数余额
+ * 双人版：Person A 完成测试后生成 coupleToken → Person B 通过 token 完成测试 → 双向 partnerId 绑定
+ */
+model Result {
+  id              String    @id @default(cuid())
+  /// JWT token，用于前端访问报告和 AI 追问的身份凭证
+  token           String    @unique
+  cardKeyId       String    @unique
+  cardKey         CardKey   @relation(fields: [cardKeyId], references: [id])
+  /// 匹配到的恋爱人格类型
+  personalityType String
+  /// 匹配到的城市
+  cityMatch       String
+  /// 5个维度的得分，JSON格式
+  scores          Json
+  /// 完整的报告内容，JSON格式
+  reportContent   Json
+  /// 灵犀次数余额（原情感币）：personal初始=3, couple初始=8, gift初始=15
+  lingxi          Int       @default(3)
+  /// 报告有效期：72小时，过期后内容模糊化
+  expiresAt       DateTime?
+  /// 双人版专用：邀请伴侣参与的一次性Token（nanoid生成）
+  coupleToken     String?   @unique
+  /// 双人版专用：关联伴侣的 Result.id（双向绑定）
+  partnerId       String?   @unique
+  chatHistory     Chat[]
+  payments        PaymentOrder[]
+  createdAt       DateTime  @default(now())
+
+  @@index([token])
+  @@index([coupleToken])
+  @@index([partnerId])
+}
+
+/**
+ * 对话记录表 - 存储用户与缘缘 AI 的每一条对话
+ */
+model Chat {
+  id          String   @id @default(cuid())
+  resultId    String
+  result      Result   @relation(fields: [resultId], references: [id])
+  /// 消息角色：user（用户）| assistant（AI）
+  role        String
+  /// 消息内容
+  content     String
+  /// 本条消息消耗的灵犀次数（assistant 消息时记录）
+  lingxiCost  Int      @default(0)
+  /// 是否在双人同频模式下产生
+  isCoupleMode Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([resultId])
+}
+
+/**
+ * 支付订单表 - 记录每一笔灵犀充能订单（对接虎皮椒支付）
+ * 状态：pending（待支付）→ paid（已完成）| failed（已失败）
+ */
+model PaymentOrder {
+  id            String    @id @default(cuid())
+  /// 商户侧唯一订单号（nanoid生成），用于回调匹配
+  outTradeNo    String    @unique
+  /// 关联的测试结果
+  resultId      String
+  result        Result    @relation(fields: [resultId], references: [id])
+  /// 支付金额（分），如1990=¥19.90
+  amount        Int
+  /// 本次购买的灵犀次数
+  lingxiCount   Int
+  /// 套餐名称，如"心动标准包"
+  packageName   String
+  /// 订单状态
+  status        String    @default("pending")
+  /// 虎皮椒支付侧订单号（回调时写入）
+  payjsOrderId  String?
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([resultId])
+  @@index([outTradeNo])
+  @@index([status])
+}
+
+/**
+ * 卡密批次表 - 追踪每次批量生成的激活码
+ */
+model CardBatch {
+  id        String    @id @default(cuid())
+  /// 批次备注名，如 "2026-02-19-小红书推广-100张"
+  name      String
+  /// 批次内生成的激活码数量
+  count     Int
+  /// 本批次的版本类型
+  planType  String    @default("personal")
+  cards     CardKey[]
+  createdAt DateTime  @default(now())
+}

@@ -1,0 +1,11 @@
+{
+  "build": {
+    "command": "npx prisma generate && npm run build"
+  },
+  "start": {
+    "command": "npm run start"
+  },
+  "environment": {
+    "NODE_ENV": "production"
+  }
+}
