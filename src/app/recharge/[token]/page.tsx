@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import CustomerService from "@/components/CustomerService";
 
 /**
  * 灵犀充能页 v2.1
@@ -499,6 +500,8 @@ export default function RechargePage() {
           </div>
         </div>
       )}
+
+      <CustomerService />
     </main>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import CustomerService from "@/components/CustomerService";
 
 /**
  * 落地页 v2.3
@@ -436,6 +437,8 @@ export default function HomePage() {
           onPaid={() => router.push("/activate")}
         />
       )}
+
+      <CustomerService />
     </main>
   );
 }
