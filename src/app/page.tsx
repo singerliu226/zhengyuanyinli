@@ -500,60 +500,52 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 定价卡片（点击选择，高亮显示） */}
+      {/* 定价卡片（静态展示，供用户了解套餐内容） */}
       <section className="px-4 py-2">
         <div className="max-w-sm mx-auto space-y-3">
-          {PLANS.map((plan) => {
-            const isSelected = selectedPlan === plan.id;
-            return (
-              <button
-                key={plan.id}
-                onClick={() => setSelectedPlan(plan.id)}
-                className={`w-full text-left rounded-3xl p-5 transition-all duration-200 border-2 ${
-                  isSelected
-                    ? "bg-white border-rose-400 shadow-lg shadow-rose-100"
-                    : "bg-white/60 border-transparent shadow-sm"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{plan.emoji}</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-800 text-sm">{plan.name}</span>
-                        {plan.badge && (
-                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-rose-400 text-white">
-                            {plan.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{plan.scene}</p>
+          {PLANS.map((plan) => (
+            <div
+              key={plan.id}
+              className={`w-full text-left rounded-3xl p-5 border-2 shadow-sm bg-white ${
+                plan.badge ? "border-rose-300 shadow-rose-100 shadow-md" : "border-transparent"
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{plan.emoji}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-800 text-sm">{plan.name}</span>
+                      {plan.badge && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-rose-400 text-white">
+                          {plan.badge}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-2xl font-bold text-rose-500">
-                      ¥{plan.price}
-                    </div>
-                    <div className="text-xs text-gray-300 line-through">¥{plan.original}</div>
+                    <p className="text-xs text-gray-400 mt-0.5">{plan.scene}</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {plan.features.map((f) => (
-                    <span
-                      key={f}
-                      className={`text-xs px-2.5 py-1 rounded-full ${
-                        f.startsWith("✨")
-                          ? "bg-rose-50 text-rose-500 font-medium"
-                          : "bg-gray-50 text-gray-500"
-                      }`}
-                    >
-                      {f}
-                    </span>
-                  ))}
+                <div className="text-right flex-shrink-0">
+                  <div className="text-2xl font-bold text-rose-500">¥{plan.price}</div>
+                  <div className="text-xs text-gray-300 line-through">¥{plan.original}</div>
                 </div>
-              </button>
-            );
-          })}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {plan.features.map((f) => (
+                  <span
+                    key={f}
+                    className={`text-xs px-2.5 py-1 rounded-full ${
+                      f.startsWith("✨")
+                        ? "bg-rose-50 text-rose-500 font-medium"
+                        : "bg-gray-50 text-gray-500"
+                    }`}
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
