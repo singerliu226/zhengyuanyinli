@@ -11,8 +11,10 @@ export const dynamic = "force-dynamic";
  * GET  /api/admin?action=results                    - 近50条用户结果
  * GET  /api/admin?action=payments                   - 近50条支付订单
  * GET  /api/admin?action=findByPhone&phone=1xx      - 通过手机号查找用户（返回匹配的所有Result）
+ * GET  /api/admin?action=manualPayments&status=pending  - 手动收款记录列表
  * POST { action: 'generate', count, batchName, planType }  - 批量生成激活码
  * POST { action: 'recharge', resultId, amount }            - 手动充值灵犀（by Result ID）
+ * POST { action: 'confirmManual', id, op }                 - 确认收款记录（op: recharge|done）
  * POST { action: 'ban', code }                             - 封禁激活码
  */
 
@@ -166,6 +168,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    /**
+     * 手动收款记录列表
+     * status 可选：pending（默认）| confirmed | all
+     */
+    if (action === "manualPayments") {
+      const status = searchParams.get("status") ?? "pending";
+      const where = status === "all" ? {} : { status };
+
+      const records = await prisma.manualPaymentRecord.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+
+      return NextResponse.json({ records });
+    }
+
     return NextResponse.json({ error: "未知操作" }, { status: 400 });
   } catch (err) {
     logger.error("Admin GET 接口异常", { error: (err as Error).message });
@@ -225,6 +244,72 @@ export async function POST(req: NextRequest) {
         newBalance: result.lingxi,
         message: `已充值 ${amount} 次灵犀`,
       });
+    }
+
+    /**
+     * 确认手动收款记录
+     * op=recharge：自动按手机号查找账户并充值灵犀（适用于 type=recharge 的记录）
+     * op=done：仅标记为已处理（适用于 type=initial，管理员已手动发码）
+     */
+    if (action === "confirmManual") {
+      const { id, op } = body;
+      if (!id || !["recharge", "done"].includes(op)) {
+        return NextResponse.json({ error: "参数无效" }, { status: 400 });
+      }
+
+      const record = await prisma.manualPaymentRecord.findUnique({ where: { id } });
+      if (!record) {
+        return NextResponse.json({ error: "记录不存在" }, { status: 404 });
+      }
+      if (record.status === "confirmed") {
+        return NextResponse.json({ error: "该记录已处理过" }, { status: 409 });
+      }
+
+      if (op === "recharge" && record.lingxiCount) {
+        // 按手机号找到最近激活的账户，自动充值
+        const key = await prisma.cardKey.findFirst({
+          where: { phone: record.phone },
+          orderBy: { activatedAt: "desc" },
+          include: { result: true },
+        });
+
+        if (!key?.result) {
+          return NextResponse.json({ error: `手机号 ${record.phone} 未找到对应账户，请先在「充值」Tab 手动操作` }, { status: 404 });
+        }
+
+        await prisma.$transaction([
+          prisma.result.update({
+            where: { id: key.result.id },
+            data: { lingxi: { increment: record.lingxiCount } },
+          }),
+          prisma.manualPaymentRecord.update({
+            where: { id },
+            data: { status: "confirmed" },
+          }),
+        ]);
+
+        logger.info("一键确认充值完成", {
+          recordId: id,
+          phone: record.phone.slice(0, 3) + "****",
+          lingxiCount: record.lingxiCount,
+          resultId: key.result.id,
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: `已充值 ${record.lingxiCount} 次灵犀`,
+          newBalance: key.result.lingxi + record.lingxiCount,
+        });
+      }
+
+      // op=done：仅标记已处理
+      await prisma.manualPaymentRecord.update({
+        where: { id },
+        data: { status: "confirmed" },
+      });
+
+      logger.info("手动收款记录已标记处理", { recordId: id, phone: record.phone.slice(0, 3) + "****" });
+      return NextResponse.json({ success: true, message: "已标记为已处理" });
     }
 
     if (action === "ban") {

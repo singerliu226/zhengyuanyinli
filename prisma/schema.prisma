@@ -126,6 +126,38 @@ model PaymentOrder {
 }
 
 /**
+ * 手动收款记录表 - 记录用户通过个人收款码支付的意向
+ * 用户在页面填写手机号后提交，管理员在后台确认并完成发码/充值
+ * type=initial：首次购买激活码；type=recharge：灵犀充值
+ */
+model ManualPaymentRecord {
+  id          String   @id @default(cuid())
+  /// 用户在支付页面填写的手机号
+  phone       String
+  /// 支付渠道：wechat | alipay
+  channel     String
+  /// 支付金额（字符串，如 "9.9"）
+  amount      String
+  /// 套餐显示名称（如"个人探索版"或"灵犀标准包"）
+  packageName String
+  /// 套餐ID（如 personal/couple/single/standard/deep）
+  packageId   String
+  /// 记录类型：initial=首次购买 / recharge=灵犀充值
+  type        String   @default("initial")
+  /// 灵犀充值时应充次数（recharge 类型专用）
+  lingxiCount Int?
+  /// 灵犀充值时关联的报告 token（用于快速定位用户）
+  resultToken String?
+  /// 处理状态：pending=待处理 / confirmed=已处理
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  @@index([phone])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/**
  * 卡密批次表 - 追踪每次批量生成的激活码
  */
 model CardBatch {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 /**
  * 后台管理页 v2.3
@@ -54,10 +54,25 @@ type PhoneUser = {
   resultCreatedAt: string;
 };
 
-type Tab = "stats" | "generate" | "keys" | "deliver" | "recharge";
+type Tab = "stats" | "generate" | "keys" | "deliver" | "recharge" | "pending";
 
 /** 充值方式：通过手机号 | 通过 Result ID */
 type RechargeMode = "phone" | "resultId";
+
+/** 手动收款记录 */
+type ManualRecord = {
+  id: string;
+  phone: string;
+  channel: string;
+  amount: string;
+  packageName: string;
+  packageId: string;
+  type: string;
+  lingxiCount: number | null;
+  resultToken: string | null;
+  status: string;
+  createdAt: string;
+};
 
 /** 可选充值次数（覆盖初始值3/8，以及各充值套餐2/15/50） */
 const RECHARGE_AMOUNTS = [1, 2, 3, 5, 8, 10, 15, 50];
@@ -78,6 +93,13 @@ export default function AdminPage() {
   const [genPlanType, setGenPlanType] = useState("personal");
   const [generating, setGenerating] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+
+  // 待确认收款记录
+  const [manualRecords, setManualRecords] = useState<ManualRecord[]>([]);
+  const [manualFilter, setManualFilter] = useState<"pending" | "confirmed" | "all">("pending");
+  const [manualLoading, setManualLoading] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const pendingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 充值 - 通用
   const [rechargeMode, setRechargeMode] = useState<RechargeMode>("phone");
@@ -167,7 +189,76 @@ export default function AdminPage() {
     setActiveTab("keys");
   }
 
-  // ── 通过手机号查找用户 ────────────────────────────────────────────────
+  // ── 加载手动收款记录（silent=true 时静默刷新，不显示 loading） ──────────
+  async function loadManualRecords(status: "pending" | "confirmed" | "all" = "pending", silent = false) {
+    if (!silent) setManualLoading(true);
+    try {
+      const res = await fetch(`/api/admin?action=manualPayments&status=${status}`, {
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      if (!res.ok) {
+        if (!silent) showMsg(`加载记录失败 (${res.status})`, "error");
+        return;
+      }
+      const data = await res.json();
+      setManualRecords(data.records ?? []);
+    } catch {
+      if (!silent) showMsg("加载记录失败，请检查网络", "error");
+    } finally {
+      if (!silent) setManualLoading(false);
+    }
+  }
+
+  // ── 在「待确认」Tab 时启动 15s 轮询，离开时清除 ───────────────────────
+  useEffect(() => {
+    if (!authed) return;
+    if (activeTab === "pending") {
+      // 进入 Tab 立即加载一次
+      loadManualRecords(manualFilter);
+      // 每 15s 静默刷新
+      pendingPollRef.current = setInterval(() => {
+        loadManualRecords(manualFilter, true);
+      }, 15000);
+    } else {
+      if (pendingPollRef.current) {
+        clearInterval(pendingPollRef.current);
+        pendingPollRef.current = null;
+      }
+    }
+    return () => {
+      if (pendingPollRef.current) {
+        clearInterval(pendingPollRef.current);
+        pendingPollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, authed]);
+
+  // ── 确认收款记录（一键充值 or 标记已处理）───────────────────────
+  async function confirmManual(id: string, op: "recharge" | "done") {
+    setConfirmingId(id);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "confirmManual", id, op }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMsg(`✅ ${data.message}`, "success");
+        // 刷新列表
+        loadManualRecords(manualFilter);
+      } else {
+        showMsg(`❌ ${data.error}`, "error");
+      }
+    } catch {
+      showMsg("❌ 操作失败，请重试", "error");
+    } finally {
+      setConfirmingId(null);
+    }
+  }
+
+  // ── 通过手机号查找用户 ──────────────────────────────────────────────────
   async function searchByPhone() {
     if (!rechargePhone.trim() || rechargePhone.trim().length < 7) {
       showMsg("请输入有效手机号", "error");
@@ -318,10 +409,11 @@ export default function AdminPage() {
   }
 
   const TABS: { id: Tab; label: string }[] = [
+    { id: "pending",  label: "💳 待确认" },
     { id: "generate", label: "🎫 生成激活码" },
-    { id: "stats", label: "📊 概览" },
-    { id: "keys", label: "🔑 激活码列表" },
-    { id: "deliver", label: "🚀 自动发货" },
+    { id: "stats",    label: "📊 概览" },
+    { id: "keys",     label: "🔑 激活码列表" },
+    { id: "deliver",  label: "🚀 自动发货" },
     { id: "recharge", label: "💰 充值" },
   ];
 
@@ -343,7 +435,10 @@ export default function AdminPage() {
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setMessage(""); }}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setMessage("");
+              }}
               className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? "border-rose-400 text-rose-500"
@@ -369,8 +464,157 @@ export default function AdminPage() {
 
       <div className="px-4 py-4 max-w-2xl mx-auto">
 
-        {/* ── Tab: 生成激活码 ──────────────────────────────────────────── */}
-        {activeTab === "generate" && (
+        {/* ── Tab: 待确认收款记录 ──────────────────────────────────────── */}
+        {activeTab === "pending" && (
+          <div className="space-y-3">
+            {/* 过滤器 + 刷新 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500 font-medium">显示：</span>
+              {(["pending", "confirmed", "all"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => { setManualFilter(f); loadManualRecords(f, false); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                    manualFilter === f
+                      ? "border-rose-400 bg-rose-50 text-rose-500"
+                      : "border-gray-200 text-gray-500"
+                  }`}
+                >
+                  {{ pending: "待处理", confirmed: "已处理", all: "全部" }[f]}
+                </button>
+              ))}
+              <button
+                onClick={() => loadManualRecords(manualFilter, false)}
+                disabled={manualLoading}
+                className="ml-auto text-xs text-rose-500 border border-rose-200 px-3 py-1.5 rounded-xl hover:bg-rose-50 transition-colors"
+              >
+                {manualLoading ? "加载中..." : "🔄 刷新"}
+              </button>
+            </div>
+
+            {/* 空状态 */}
+            {!manualLoading && manualRecords.length === 0 && (
+              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+                <div className="text-3xl mb-2">📭</div>
+                <p className="text-sm text-gray-500 font-medium">暂无{manualFilter === "pending" ? "待处理" : manualFilter === "confirmed" ? "已处理" : ""}记录</p>
+                <p className="text-xs text-gray-400 mt-1 mb-4">用户填写手机号并点击「我已完成支付」后，记录将自动出现在这里</p>
+                <button
+                  onClick={() => loadManualRecords(manualFilter, false)}
+                  className="text-xs text-rose-400 border border-rose-200 px-4 py-2 rounded-xl hover:bg-rose-50 transition-colors"
+                >
+                  🔄 点击刷新
+                </button>
+              </div>
+            )}
+
+            {/* 加载态 */}
+            {manualLoading && (
+              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+                <p className="text-sm text-gray-400">加载中...</p>
+              </div>
+            )}
+
+            {/* 记录列表 */}
+            {manualRecords.map((rec) => {
+              const isRecharge = rec.type === "recharge";
+              const isPending = rec.status === "pending";
+              const channelLabel = rec.channel === "wechat" ? "💚 微信" : "💙 支付宝";
+              const typeLabel = isRecharge ? "灵犀充值" : "首次购买";
+              const typeColor = isRecharge ? "text-purple-600 bg-purple-50" : "text-rose-600 bg-rose-50";
+
+              return (
+                <div key={rec.id} className={`bg-white rounded-2xl p-4 shadow-sm border ${isPending ? "border-amber-100" : "border-gray-100"}`}>
+                  {/* 标题行 */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${typeColor}`}>{typeLabel}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isPending ? "bg-amber-50 text-amber-600" : "bg-green-50 text-green-600"}`}>
+                        {isPending ? "待处理" : "✓ 已处理"}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      {new Date(rec.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+
+                  {/* 详情 */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
+                    <div>
+                      <span className="text-xs text-gray-400">手机号</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-sm font-mono font-bold text-gray-800">{rec.phone}</span>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(rec.phone); showMsg("✅ 手机号已复制", "success"); }}
+                          className="text-xs text-gray-300 hover:text-rose-400 transition-colors"
+                        >
+                          复制
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-400">渠道</span>
+                      <div className="text-sm font-medium text-gray-700 mt-0.5">{channelLabel}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-400">套餐</span>
+                      <div className="text-sm font-medium text-gray-800 mt-0.5">{rec.packageName}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-400">金额</span>
+                      <div className="text-sm font-bold text-rose-500 mt-0.5">¥{rec.amount}</div>
+                    </div>
+                    {rec.lingxiCount && (
+                      <div>
+                        <span className="text-xs text-gray-400">应充灵犀</span>
+                        <div className="text-sm font-bold text-purple-600 mt-0.5">💓 {rec.lingxiCount} 次</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 操作按钮（仅待处理时显示） */}
+                  {isPending && (
+                    <div className="flex gap-2">
+                      {isRecharge ? (
+                        <button
+                          onClick={() => confirmManual(rec.id, "recharge")}
+                          disabled={confirmingId === rec.id}
+                          className="flex-1 py-2.5 text-sm font-medium bg-purple-500 text-white rounded-xl disabled:opacity-50 hover:bg-purple-600 transition-colors"
+                        >
+                          {confirmingId === rec.id ? "充值中..." : `💓 一键充值 ${rec.lingxiCount} 次`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => confirmManual(rec.id, "done")}
+                          disabled={confirmingId === rec.id}
+                          className="flex-1 py-2.5 text-sm font-medium bg-green-500 text-white rounded-xl disabled:opacity-50 hover:bg-green-600 transition-colors"
+                        >
+                          {confirmingId === rec.id ? "处理中..." : "✓ 已发送激活码"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => confirmManual(rec.id, "done")}
+                        disabled={confirmingId === rec.id}
+                        className="px-3 py-2 text-xs text-gray-400 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors"
+                      >
+                        仅标记
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* 操作说明（始终显示） */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-700 leading-relaxed">
+              💡 用户填写手机号并点击「我已完成支付」后，记录自动出现在这里。
+              核对收款通知后，点击「一键充值」或「已发送激活码」即可完成处理。
+              页面每 15 秒自动刷新。
+            </div>
+          </div>
+        )}
+
+      {/* ── Tab: 生成激活码 ──────────────────────────────────────────── */}
+      {activeTab === "generate" && (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-4">批量生成激活码</h3>
