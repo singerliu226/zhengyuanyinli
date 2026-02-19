@@ -1,10 +1,9 @@
 /**
- * Prisma 数据库客户端单例
+ * Prisma 数据库客户端单例（懒加载）
  *
- * Prisma 7 使用 adapter 模式连接 PostgreSQL：
- * - 通过 @prisma/adapter-pg 适配器连接
- * - DATABASE_URL 从环境变量读取
- * - 单例模式防止开发热重载时连接泄漏
+ * 使用 Proxy 延迟初始化，避免模块 import 时就访问 DATABASE_URL，
+ * 解决 Next.js build 阶段静态分析时因环境变量缺失而报错的问题。
+ * 实际客户端仅在第一次调用数据库方法时才创建。
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -15,35 +14,45 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
+/** 真正创建 PrismaClient，只有在运行时第一次访问 prisma 属性时才执行 */
+function getOrCreateClient(): PrismaClient {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error("DATABASE_URL 环境变量未设置");
   }
 
-  // Prisma 7 使用 adapter 连接 PostgreSQL
   const adapter = new PrismaPg({ connectionString });
-
-  return new PrismaClient({
+  const client = new PrismaClient({
     adapter,
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
         : ["error"],
   });
+
+  if (process.env.NODE_ENV !== "production") {
+    globalForPrisma.prisma = client;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    client.$connect().then(() => {
+      logger.info("数据库连接成功");
+    }).catch((err: Error) => {
+      logger.error("数据库连接失败", { error: err.message });
+    });
+  }
+
+  return client;
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
-
-// 记录数据库连接状态（仅开发环境）
-if (process.env.NODE_ENV === "development") {
-  prisma.$connect().then(() => {
-    logger.info("数据库连接成功");
-  }).catch((err: Error) => {
-    logger.error("数据库连接失败", { error: err.message });
-  });
-}
+/**
+ * 通过 Proxy 实现懒加载：import 时不初始化，
+ * 第一次调用 prisma.xxx 时才触发 getOrCreateClient()
+ */
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_, prop: string | symbol) {
+    return getOrCreateClient()[prop as keyof PrismaClient];
+  },
+});

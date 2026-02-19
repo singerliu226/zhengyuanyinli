@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/deliver?secret={ADMIN_SECRET}&planType=personal
  *

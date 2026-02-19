@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * /api/admin - 后台管理接口 v2.1
  * 变更：emotionCoins → lingxi，generate 支持 planType 参数
