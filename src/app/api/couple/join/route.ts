@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { calculateScore, type UserAnswers } from "@/lib/scoring";
 import { generateReport } from "@/lib/report";
 import { signResultToken } from "@/lib/jwt";
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     // ── 交互式事务：原子完成三步操作 ──────────────────────────────────────
     // 任何一步失败自动回滚全部操作
-    const partnerResult = await prisma.$transaction(async (tx) => {
+    const partnerResult = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Step 1: 为伴侣创建虚拟 CardKey（外键约束要求，伴侣无需真实激活码）
       const virtualCardKey = await tx.cardKey.create({
         data: {
