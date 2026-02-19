@@ -187,16 +187,18 @@ export default function ResultPage() {
     { label: "依恋风格", value: report.scores.d5, color: "bg-emerald-400" },
   ];
 
+  const chatHref = info.hasPartner ? `/chat/${token}?coupleMode=true` : `/chat/${token}`;
+  const chatLabel = info.hasPartner ? "问缘缘（双人同频）" : `问缘缘（${info.lingxiLeft}次灵犀）`;
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 pb-32">
+    <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 pb-24">
+
       {/* 灵犀 + 有效期提示条 */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-rose-100 px-6 py-3">
         <div className="max-w-sm mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-rose-400">💓</span>
-            <span className="text-sm font-medium text-gray-700">
-              {info.lingxiLeft} 次灵犀
-            </span>
+            <span className="text-sm font-medium text-gray-700">{info.lingxiLeft} 次灵犀</span>
             {info.lingxiLeft === 0 && (
               <Link href={`/recharge/${token}`}>
                 <span className="text-xs text-rose-500 underline">立即充能</span>
@@ -213,20 +215,15 @@ export default function ResultPage() {
       </div>
 
       {/* 顶部人格卡片（可截图分享） */}
-      <section className="px-6 pt-8 pb-6">
+      <section className="px-6 pt-8 pb-4">
         <div className="max-w-sm mx-auto bg-white rounded-3xl p-6 shadow-md text-center">
           <div className="text-6xl mb-3">{report.personalityEmoji}</div>
           <div className="text-xs text-gray-400 mb-1">你的恋爱人格</div>
           <h1 className="text-2xl font-bold text-gradient mb-1">{report.personalityName}</h1>
           <p className="text-gray-500 text-sm mb-4">{report.tagline}</p>
 
-          <div className="bg-rose-50 rounded-2xl px-4 py-3 mb-4">
-            <div className="text-xs text-gray-400 mb-1">你的恋爱城市</div>
-            <div className="text-lg font-bold text-rose-500">{report.cityMatch}</div>
-          </div>
-
           {/* 维度分数条 */}
-          <div className="space-y-2.5 mb-4">
+          <div className="space-y-2.5 mb-5">
             {dimensionScores.map((dim) => (
               <div key={dim.label} className="flex items-center gap-3">
                 <span className="text-xs text-gray-500 w-12 text-right flex-shrink-0">{dim.label}</span>
@@ -249,7 +246,6 @@ export default function ResultPage() {
         <section className="px-6 pb-4">
           <div className="max-w-sm mx-auto">
             {info.hasPartner && info.partnerInfo ? (
-              /* 伴侣已完成测试 */
               <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-3xl p-5 border border-rose-100">
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-xl">💕</span>
@@ -266,14 +262,11 @@ export default function ResultPage() {
                     <div className="text-sm font-semibold text-purple-500">{info.partnerInfo.personalityType}</div>
                   </div>
                 </div>
-                <Link href={`/chat/${token}?coupleMode=true`}>
-                  <button className="btn-primary w-full py-3 text-sm">
-                    💬 开启双人同频对话
-                  </button>
+                <Link href={chatHref}>
+                  <button className="btn-primary w-full py-3 text-sm">💬 开启双人同频对话</button>
                 </Link>
               </div>
             ) : (
-              /* 等待伴侣加入 */
               <div className="bg-white rounded-3xl p-5 shadow-sm border border-dashed border-rose-200">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">💌</span>
@@ -294,12 +287,25 @@ export default function ResultPage() {
         </section>
       )}
 
-      {/* 报告正文 */}
+      {/* ── 报告正文（各模块并列卡片）── */}
       <div className="px-6 max-w-sm mx-auto space-y-4">
+
+        {/* 1. 恋爱人格解读 */}
         <ReportModule title="🧠 你的恋爱人格" content={report.modules.personality} />
-        <ReportModule title={`🌆 为什么是${report.cityMatch}`} content={report.modules.city} />
+
+        {/* 2. 恋爱城市解读（与其他模块并列，完整展开） */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="font-bold text-gray-800">🏙️ 你的恋爱城市</h3>
+            <span className="text-rose-500 font-bold text-base">{report.cityMatch}</span>
+          </div>
+          <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{report.modules.city}</p>
+        </div>
+
+        {/* 3. 理想型画像 */}
         <ReportModule title="💝 你的理想型画像" content={report.modules.idealType} />
 
+        {/* 4. 恋爱优势 */}
         <div className="bg-white rounded-3xl p-6 shadow-sm">
           <h3 className="font-bold text-gray-800 mb-4">✨ 你的恋爱优势</h3>
           <div className="space-y-3">
@@ -312,6 +318,7 @@ export default function ResultPage() {
           </div>
         </div>
 
+        {/* 5. 警惕模式 */}
         <div className="bg-amber-50 rounded-3xl p-6 shadow-sm border border-amber-100">
           <h3 className="font-bold text-gray-800 mb-4">⚠️ 需要警惕的模式</h3>
           <div className="space-y-3">
@@ -324,63 +331,68 @@ export default function ResultPage() {
           </div>
         </div>
 
+        {/* 6. 最佳匹配人格 */}
         <div className="bg-purple-50 rounded-3xl p-6 shadow-sm border border-purple-100">
           <h3 className="font-bold text-gray-800 mb-1">💑 最佳匹配人格</h3>
           <p className="text-purple-500 font-semibold text-lg mb-3">{report.modules.compatibility.matchPersonalityName}</p>
           <p className="text-gray-600 text-sm leading-relaxed">{report.modules.compatibility.content}</p>
         </div>
 
-        {/* 引导充能灵犀 */}
-        <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-3xl p-5 border border-rose-100">
-          <p className="font-bold text-gray-800 text-sm mb-2">💓 继续探索你的心</p>
-          <p className="text-gray-500 text-xs leading-relaxed mb-3">
-            你的报告已生成，但这只是开始。越早追问，越能捕捉当下真实的情绪线索。
-            你还有 <strong className="text-rose-500">{info.lingxiLeft} 次灵犀</strong> 可以问缘缘：
+        {/* 7. 对话引导区（报告末尾，引导点击缘缘） */}
+        <div className="bg-gradient-to-br from-rose-400 to-pink-500 rounded-3xl p-6 text-white shadow-md">
+          <p className="font-bold text-base mb-1">还有更多想知道的？</p>
+          <p className="text-rose-100 text-xs mb-4 leading-relaxed">
+            报告是起点，缘缘可以帮你深度解读。你有 <strong className="text-white">{info.lingxiLeft} 次灵犀</strong>，问出你真正想问的那句话。
           </p>
-          <div className="space-y-1.5 mb-4">
+          <div className="space-y-2 mb-4">
             {[
               "我和现任适合在哪个城市发展？",
               "为什么我总是吸引同一类型的人？",
               "根据我的分数，我需要警惕什么？",
             ].map((q) => (
-              <div key={q} className="bg-white rounded-xl px-3 py-2 text-xs text-gray-600">💬 {q}</div>
+              <Link key={q} href={chatHref}>
+                <div className="bg-white/20 hover:bg-white/30 transition-colors rounded-2xl px-4 py-2.5 text-sm text-white flex items-center justify-between cursor-pointer">
+                  <span>💬 {q}</span>
+                  <span className="text-rose-200 text-xs ml-2">→</span>
+                </div>
+              </Link>
             ))}
           </div>
-          {info.lingxiLeft === 0 && (
+          {info.lingxiLeft === 0 ? (
             <Link href={`/recharge/${token}`}>
-              <button className="w-full py-2.5 text-sm text-rose-500 border border-rose-300 rounded-2xl mb-3">
-                ⚡ 为灵犀充能
-              </button>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* 底部 CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-6 py-4 bg-white/90 backdrop-blur-sm border-t border-gray-100">
-        <div className="max-w-sm mx-auto flex gap-3">
-          {info.lingxiLeft > 0 ? (
-            <Link href={`/chat/${token}`} className="flex-1">
-              <button className="btn-primary w-full py-3 text-sm">
-                💬 与缘缘对话（{info.lingxiLeft}次灵犀）
+              <button className="w-full py-3 text-sm font-semibold bg-white text-rose-500 rounded-2xl">
+                ⚡ 先充能灵犀，再来问缘缘
               </button>
             </Link>
           ) : (
-            <>
-              <Link href={`/recharge/${token}`} className="flex-1">
-                <button className="w-full py-3 text-sm bg-rose-50 border-2 border-rose-400 text-rose-500 rounded-2xl font-medium">
-                  ⚡ 充能灵犀
-                </button>
-              </Link>
-              <Link href={`/chat/${token}`} className="flex-1">
-                <button className="btn-primary w-full py-3 text-sm">
-                  💬 继续对话
-                </button>
-              </Link>
-            </>
+            <Link href={chatHref}>
+              <button className="w-full py-3 text-sm font-semibold bg-white text-rose-500 rounded-2xl">
+                💬 现在就问缘缘
+              </button>
+            </Link>
           )}
         </div>
+
       </div>
+
+      {/* ── 浮动"问缘缘"按钮（右下角，始终可见）── */}
+      {info.lingxiLeft > 0 ? (
+        <Link href={chatHref}>
+          <button className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3.5 rounded-full shadow-lg text-sm font-semibold text-white"
+            style={{ background: "linear-gradient(135deg, #f43f5e, #ec4899)" }}>
+            💬 问缘缘
+            <span className="bg-white/30 text-white text-xs px-1.5 py-0.5 rounded-full">{info.lingxiLeft}</span>
+          </button>
+        </Link>
+      ) : (
+        <Link href={`/recharge/${token}`}>
+          <button className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3.5 rounded-full shadow-lg text-sm font-semibold text-white"
+            style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>
+            ⚡ 充能灵犀
+          </button>
+        </Link>
+      )}
+
     </main>
   );
 }

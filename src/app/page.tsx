@@ -47,17 +47,25 @@ export default function HomePage() {
     <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
 
       {/* ── 已购买快捷入口条（置顶，买家从这里直接进入） ── */}
-      <div className="bg-white border-b border-rose-100 px-6 py-3 flex items-center justify-between">
-        <div className="text-xs text-gray-500">
+      <div className="bg-white border-b border-rose-100 px-4 py-3 flex items-center justify-between gap-2">
+        <div className="text-xs text-gray-500 flex-shrink-0">
           <span className="mr-1">🎫</span>
-          已购买激活码？
+          已购买？
         </div>
-        <button
-          onClick={() => router.push("/activate")}
-          className="text-xs font-semibold text-white bg-rose-400 hover:bg-rose-500 px-4 py-2 rounded-full transition-colors"
-        >
-          立即激活 →
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push("/find")}
+            className="text-xs font-medium text-rose-400 border border-rose-200 px-3 py-1.5 rounded-full transition-colors hover:bg-rose-50"
+          >
+            找回报告
+          </button>
+          <button
+            onClick={() => router.push("/activate")}
+            className="text-xs font-semibold text-white bg-rose-400 hover:bg-rose-500 px-4 py-1.5 rounded-full transition-colors"
+          >
+            立即激活 →
+          </button>
+        </div>
       </div>
 
       {/* 顶部标题区 */}

@@ -85,7 +85,18 @@ export default function ActivatePage() {
       const data = await res.json();
 
       if (!data.success) {
+        // 手机号已有记录 → 引导去「找回报告」页面
+        if (data.canRetrieve) {
+          router.push(`/find?phone=${encodeURIComponent(phone)}`);
+          return;
+        }
         setError(data.error || "激活失败，请重试");
+        return;
+      }
+
+      // 已完成过测试的回头客 → 直接跳到已有报告
+      if (data.alreadyCompleted && data.resultToken) {
+        router.push(`/result/${data.resultToken}`);
         return;
       }
 
@@ -206,6 +217,13 @@ export default function ActivatePage() {
           <p className="text-center text-gray-400 text-xs">
             🔒 激活码绑定手机号后，仅你本人可使用
           </p>
+          {/* 找回报告入口：已完成测试的回头客用手机号直接找回 */}
+          <button
+            onClick={() => router.push("/find")}
+            className="w-full text-center text-rose-400 text-xs underline py-1"
+          >
+            已完成测试？用手机号找回报告 →
+          </button>
           <p className="text-center text-gray-400 text-xs">
             还没有激活码？小红书 / 闲鱼搜索「正缘引力」购买
           </p>

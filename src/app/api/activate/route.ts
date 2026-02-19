@@ -42,10 +42,21 @@ export async function POST(req: NextRequest) {
     const result = await activateCardKey(code, phone, ip, userAgent);
 
     if (!result.success) {
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+      // canRetrieve=true 时前端引导去「找回报告」而非仅报错
+      return NextResponse.json(
+        { success: false, error: result.error, canRetrieve: result.canRetrieve ?? false },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ success: true, cardKeyId: result.cardKeyId, planType: result.planType });
+    // alreadyCompleted=true 时前端直接跳转到已有报告
+    return NextResponse.json({
+      success: true,
+      cardKeyId: result.cardKeyId,
+      planType: result.planType,
+      resultToken: result.resultToken ?? null,
+      alreadyCompleted: result.alreadyCompleted ?? false,
+    });
   } catch (err) {
     logger.error("激活接口异常", { error: (err as Error).message });
     return NextResponse.json({ success: false, error: "服务器异常，请稍后重试" }, { status: 500 });

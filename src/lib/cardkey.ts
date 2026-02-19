@@ -105,17 +105,21 @@ export function generateDeviceFingerprint(ip: string, userAgent: string): string
 }
 
 export type ActivateResult =
-  | { success: true; cardKeyId: string; planType: string }
-  | { success: false; error: string };
+  | { success: true; cardKeyId: string; planType: string; resultToken?: string; alreadyCompleted?: boolean }
+  | { success: false; error: string; canRetrieve?: boolean };
 
 /**
  * 激活一张卡密
- * 执行完整的防滥用校验链：码是否存在 → 状态是否可用 → 手机号是否已绑定
  *
- * @param code 用户输入的激活码（自动转大写并去除空格）
- * @param phone 用户手机号（用于绑定，防止一号多测）
- * @param ip 请求 IP
- * @param userAgent 请求 User-Agent
+ * 执行完整的防滥用校验链，同时支持回头客二次访问：
+ * - 已完成测试（used）+ 手机号匹配 → 返回已有 resultToken，直接跳到报告页
+ * - 已激活未完成（activated）+ 手机号匹配 → 允许继续答题
+ * - 手机号已绑其他码 → 返回 canRetrieve=true，引导用户去「找回报告」
+ *
+ * @param code 用户输入的激活码
+ * @param phone 用户手机号
+ * @param ip 请求 IP（设备指纹）
+ * @param userAgent 请求 UA（设备指纹）
  */
 export async function activateCardKey(
   code: string,
@@ -123,7 +127,6 @@ export async function activateCardKey(
   ip: string,
   userAgent: string
 ): Promise<ActivateResult> {
-  // 标准化输入
   const normalizedCode = code.trim().toUpperCase();
   const normalizedPhone = phone.trim();
 
@@ -132,6 +135,7 @@ export async function activateCardKey(
   // 校验1：码是否存在
   const cardKey = await prisma.cardKey.findUnique({
     where: { code: normalizedCode },
+    include: { result: { select: { token: true } } },
   });
 
   if (!cardKey) {
@@ -145,48 +149,57 @@ export async function activateCardKey(
     return { success: false, error: "该激活码已被停用，请联系客服" };
   }
 
-  // 校验3：是否已被使用
+  // 校验3：已完成测试（used）→ 验证手机号后直接找回报告
   if (cardKey.status === "used") {
-    log.warn("尝试复用已完成的激活码", { code: normalizedCode });
-    return { success: false, error: "该激活码已完成测试，每码仅限使用一次" };
-  }
-
-  // 校验4：是否已被激活（但未完成测试，允许同一人继续）
-  if (cardKey.status === "activated") {
     if (cardKey.phone === normalizedPhone) {
-      // 同一手机号重新激活（如页面刷新后），允许继续
-      log.info("同手机号重新激活，允许继续", { code: normalizedCode });
-      return { success: true, cardKeyId: cardKey.id, planType: cardKey.planType };
+      // 同一手机号：找回已有报告，无需重测
+      const resultToken = cardKey.result?.token ?? null;
+      log.info("已完成用户找回报告", { code: normalizedCode });
+      return {
+        success: true,
+        cardKeyId: cardKey.id,
+        planType: cardKey.planType,
+        resultToken: resultToken ?? undefined,
+        alreadyCompleted: true,
+      };
     } else {
-      log.warn("激活码已被其他手机号激活", { code: normalizedCode });
-      return { success: false, error: "该激活码已被使用，每码仅限一人" };
+      log.warn("尝试用不同手机号复用激活码", { code: normalizedCode });
+      return { success: false, error: "该激活码已被其他手机号使用，每码仅限一人" };
     }
   }
 
-  // 校验5：该手机号是否已激活过其他码
+  // 校验4：已激活未完成（activated）→ 同手机号允许继续
+  if (cardKey.status === "activated") {
+    if (cardKey.phone === normalizedPhone) {
+      log.info("同手机号重新进入，允许继续答题", { code: normalizedCode });
+      return { success: true, cardKeyId: cardKey.id, planType: cardKey.planType };
+    } else {
+      log.warn("激活码已被其他手机号激活", { code: normalizedCode });
+      return { success: false, error: "该激活码已被其他用户使用，每码仅限一人" };
+    }
+  }
+
+  // 校验5：手机号是否已绑定其他码（防止一机多测）
+  // 若已有报告，引导用「找回报告」而非硬拒绝
   const existingByPhone = await prisma.cardKey.findFirst({
-    where: {
-      phone: normalizedPhone,
-      status: { in: ["activated", "used"] },
-    },
+    where: { phone: normalizedPhone, status: { in: ["activated", "used"] } },
   });
 
   if (existingByPhone) {
     log.warn("手机号已绑定其他激活码", { phone: normalizedPhone.slice(0, 3) + "****" });
-    return { success: false, error: "该手机号已激活过测试，每个手机号仅限一次" };
+    return {
+      success: false,
+      error: "该手机号已有测试记录",
+      canRetrieve: true,  // 前端据此引导用户去「找回报告」
+    };
   }
 
-  // 通过所有校验，执行激活
+  // 通过所有校验 → 执行激活
   const deviceInfo = generateDeviceFingerprint(ip, userAgent);
 
   await prisma.cardKey.update({
     where: { id: cardKey.id },
-    data: {
-      status: "activated",
-      phone: normalizedPhone,
-      deviceInfo,
-      activatedAt: new Date(),
-    },
+    data: { status: "activated", phone: normalizedPhone, deviceInfo, activatedAt: new Date() },
   });
 
   log.info("激活码激活成功", { cardKeyId: cardKey.id, planType: cardKey.planType });

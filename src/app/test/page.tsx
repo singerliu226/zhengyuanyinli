@@ -33,6 +33,15 @@ export default function TestPage() {
     setCardKeyId(id);
   }, [router]);
 
+  // 未获取到激活凭证前不渲染题目（防止空白闪屏）
+  if (!cardKeyId) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">正在验证激活状态...</div>
+      </main>
+    );
+  }
+
   function handleSelect(optionId: "A" | "B" | "C" | "D") {
     const newAnswers = { ...answers, [currentQuestion.id]: optionId };
     setAnswers(newAnswers);
