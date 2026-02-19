@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import CustomerService from "@/components/CustomerService";
 
 type Message = {
   role: "user" | "assistant";
@@ -48,6 +49,7 @@ export default function ChatPage() {
   const [diagDesc, setDiagDesc] = useState("");
   const [partnerHasCompleted, setPartnerHasCompleted] = useState(false);
   const [partnerPersonalityType, setPartnerPersonalityType] = useState("");
+  const [hasSentMessage, setHasSentMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -186,6 +188,8 @@ export default function ChatPage() {
       }
 
       setLingxiLeft(lingxiRemaining);
+      // 第一条消息发送成功后，立即解锁客服按钮
+      if (!hasSentMessage) setHasSentMessage(true);
     } catch (err) {
       setError((err as Error).message || "发送失败，请重试");
       setMessages(newMessages);
@@ -533,6 +537,9 @@ export default function ChatPage() {
           余额 {lingxiLeft ?? "?"} 次灵犀
         </p>
       </div>
+
+      {/* 客服入口：发过消息后实时出现，或之前有过历史对话/充值 */}
+      <CustomerService token={token} extraVisible={hasSentMessage} />
     </main>
   );
 }

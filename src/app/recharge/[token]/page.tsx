@@ -501,7 +501,8 @@ export default function RechargePage() {
         </div>
       )}
 
-      <CustomerService />
+      {/* 支付成功后才显示客服入口（有成功订单记录） */}
+      <CustomerService token={token} extraVisible={pollResult === "success"} />
     </main>
   );
 }

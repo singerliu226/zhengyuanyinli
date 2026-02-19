@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import CustomerService from "@/components/CustomerService";
 
 /**
  * 激活页 v2.1
@@ -231,7 +230,6 @@ export default function ActivatePage() {
         </div>
       </div>
 
-      <CustomerService />
     </main>
   );
 }

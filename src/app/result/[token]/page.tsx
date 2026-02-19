@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import CustomerService from "@/components/CustomerService";
 
 type ReportData = {
   personalityId: string;
@@ -424,6 +425,9 @@ export default function ResultPage() {
         </div>
 
       </div>
+
+      {/* 客服入口（左下角，仅有过对话或充值记录时显示） */}
+      <CustomerService token={token} />
 
       {/* ── 浮动"问缘缘"按钮（右下角，始终可见）── */}
       {info.lingxiLeft > 0 ? (
