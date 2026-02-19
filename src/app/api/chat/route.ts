@@ -30,7 +30,7 @@ import logger from "@/lib/logger";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { token, message, history = [], coupleMode = false } = body;
+    const { token, message, history = [], coupleMode = false, deepMode = false } = body;
 
     if (!token || typeof token !== "string") {
       return NextResponse.json({ error: "缺少身份凭证" }, { status: 401 });
@@ -56,9 +56,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "测试结果不存在" }, { status: 404 });
     }
 
-    // 判断消耗档位（深夜模式×1.5向上取整）
+    // 判断消耗档位（deepMode 强制2次；常规模式按关键词自动判断；深夜×1.5）
     const nightMode = isNightMode();
-    const lingxiCost = calculateLingxiCost(message.trim(), nightMode);
+    let lingxiCost = deepMode ? 2 : calculateLingxiCost(message.trim(), nightMode);
+    // 常规模式上限1次（防止关键词误判升为2次）
+    if (!deepMode) lingxiCost = Math.min(lingxiCost, 1);
 
     // 灵犀不足：返回结构化信息，前端渲染充能引导
     if (result.lingxi < lingxiCost) {

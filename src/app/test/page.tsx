@@ -130,6 +130,7 @@ export default function TestPage() {
                 D3: "🎨 审美与环境偏好",
                 D4: "💰 价值观与金钱观",
                 D5: "💕 情感需求",
+                MBTI: "🧬 十六型人格测评",
               }[currentQuestion.dimension]
             }
           </div>

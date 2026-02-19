@@ -10,6 +10,7 @@ type ReportData = {
   personalityEmoji: string;
   tagline: string;
   cityMatch: string;
+  mbtiType?: string;
   scores: {
     d1: number; d2: number; d3: number; d4: number; d5: number;
     labels: { d1: string; d2: string; d3: string; d4: string; d5: string };
@@ -220,7 +221,13 @@ export default function ResultPage() {
           <div className="text-6xl mb-3">{report.personalityEmoji}</div>
           <div className="text-xs text-gray-400 mb-1">你的恋爱人格</div>
           <h1 className="text-2xl font-bold text-gradient mb-1">{report.personalityName}</h1>
-          <p className="text-gray-500 text-sm mb-4">{report.tagline}</p>
+          <p className="text-gray-500 text-sm mb-2">{report.tagline}</p>
+          {report.mbtiType && (
+            <div className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-500 text-xs font-medium px-3 py-1 rounded-full mb-3">
+              <span>🧬</span>
+              <span>十六型人格：{report.mbtiType}</span>
+            </div>
+          )}
 
           {/* 维度分数条 */}
           <div className="space-y-2.5 mb-5">
@@ -340,15 +347,15 @@ export default function ResultPage() {
 
         {/* 7. 对话引导区（报告末尾，引导点击缘缘） */}
         <div className="bg-gradient-to-br from-rose-400 to-pink-500 rounded-3xl p-6 text-white shadow-md">
-          <p className="font-bold text-base mb-1">还有更多想知道的？</p>
+          <p className="font-bold text-base mb-1">已经有对象了？</p>
           <p className="text-rose-100 text-xs mb-4 leading-relaxed">
-            报告是起点，缘缘可以帮你深度解读。你有 <strong className="text-white">{info.lingxiLeft} 次灵犀</strong>，问出你真正想问的那句话。
+            说出你的烦恼，让 AI 缘缘来帮你深度解读。你有 <strong className="text-white">{info.lingxiLeft} 次灵犀</strong>，问出你真正想问的那句话。
           </p>
           <div className="space-y-2 mb-4">
             {[
-              "我和现任适合在哪个城市发展？",
-              "为什么我总是吸引同一类型的人？",
-              "根据我的分数，我需要警惕什么？",
+              "我们为什么总为同一件事反复争吵？",
+              "TA 的行为背后是什么心理，我该怎么回应？",
+              "我们的相处模式哪里出了问题，怎么改善？",
             ].map((q) => (
               <Link key={q} href={chatHref}>
                 <div className="bg-white/20 hover:bg-white/30 transition-colors rounded-2xl px-4 py-2.5 text-sm text-white flex items-center justify-between cursor-pointer">

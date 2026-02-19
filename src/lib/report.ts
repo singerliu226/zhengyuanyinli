@@ -36,6 +36,8 @@ export type ReportData = {
   };
   /** 与人格标准向量的余弦相似度（0-1） */
   similarity: number;
+  /** MBTI 四字母类型，由 Q26-Q29 计算 */
+  mbtiType: string;
   /** 报告7个模块内容 */
   modules: {
     personality: string;
@@ -60,7 +62,7 @@ export type ReportData = {
  * @returns 完整报告数据，可直接 JSON.stringify 存入数据库
  */
 export function generateReport(scoringResult: ScoringResult): ReportData {
-  const { scores, personality, similarity } = scoringResult;
+  const { scores, personality, similarity, mbtiType } = scoringResult;
 
   log.info("生成报告", {
     personalityType: personality.name,
@@ -79,6 +81,7 @@ export function generateReport(scoringResult: ScoringResult): ReportData {
     personalityEmoji: personality.emoji,
     tagline: personality.tagline,
     cityMatch: personality.cities.join("/"),
+    mbtiType: mbtiType ?? "未知",
     scores: {
       ...scores,
       labels: {

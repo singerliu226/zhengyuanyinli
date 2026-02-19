@@ -18,10 +18,10 @@ const PACKAGES = [
     id: "single",
     emoji: "⚡",
     name: "单次急救",
-    lingxi: 1,
+    lingxi: 2,
     price: "5.9",
     original: "9.9",
-    desc: "临时起意的一个疑问",
+    desc: "临时起意的两个疑问",
     recommended: false,
   },
   {
@@ -301,7 +301,7 @@ export default function RechargePage() {
             >
               {isProcessing
                 ? "正在创建订单..."
-                : `支付 ¥${PACKAGES.find((p) => p.id === selectedPkg)?.price ?? "--"} · 微信/支付宝`}
+                : `支付 ¥${PACKAGES.find((p) => p.id === selectedPkg)?.price ?? "--"} · 支付宝`}
             </button>
             <p className="text-center text-gray-400 text-xs mt-3">
               支付完成后自动到账 · 如有问题请联系客服

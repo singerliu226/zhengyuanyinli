@@ -29,6 +29,8 @@ export type ScoringResult = {
   similarity: number;
   /** 所有人格的相似度排名（便于调试和扩展） */
   allSimilarities: { id: string; name: string; similarity: number }[];
+  /** MBTI 四字母类型（如 INFJ、ENTP），由 Q26-Q29 计算得出 */
+  mbtiType: string;
 };
 
 /**
@@ -54,13 +56,31 @@ function scoresToArray(scores: DimensionScores): number[] {
  * @param answers 用户答案映射，key 为题目 ID（1-25），value 为选项 ID（A/B/C/D）
  * @returns 完整的评分结果，包含归一化分数和匹配人格
  */
+/**
+ * 根据 Q26-Q29 的答案计算 MBTI 四字母类型
+ * Q26: A=E / B=I
+ * Q27: A=N / B=S
+ * Q28: A=T / B=F
+ * Q29: A=J / B=P
+ */
+function calculateMBTI(answers: UserAnswers): string {
+  const ei = answers[26] === "A" ? "E" : "I";
+  const ns = answers[27] === "A" ? "N" : "S";
+  const tf = answers[28] === "A" ? "T" : "F";
+  const jp = answers[29] === "A" ? "J" : "P";
+  return `${ei}${ns}${tf}${jp}`;
+}
+
 export function calculateScore(answers: UserAnswers): ScoringResult {
   log.info("开始评分计算", { answeredCount: Object.keys(answers).length });
 
-  // Step 1: 累加各维度原始分
+  // Step 1: 累加各维度原始分（仅处理 D1-D5 题目，跳过 MBTI 题）
   const rawScores: DimensionScores = { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 };
 
   for (const question of QUESTIONS) {
+    // MBTI 题（Q26-Q29）不参与 D1-D5 评分
+    if (question.dimension === "MBTI") continue;
+
     const selectedId = answers[question.id];
     if (!selectedId) {
       log.warn("题目未作答，跳过", { questionId: question.id });
@@ -80,6 +100,10 @@ export function calculateScore(answers: UserAnswers): ScoringResult {
     rawScores.d4 += option.scores.d4;
     rawScores.d5 += option.scores.d5;
   }
+
+  // 计算 MBTI 类型
+  const mbtiType = calculateMBTI(answers);
+  log.info("MBTI 类型", { mbtiType });
 
   log.debug("原始维度得分", rawScores);
 
@@ -127,5 +151,6 @@ export function calculateScore(answers: UserAnswers): ScoringResult {
     personality: matchedPersonality,
     similarity: topMatch.similarity,
     allSimilarities: similarities,
+    mbtiType,
   };
 }

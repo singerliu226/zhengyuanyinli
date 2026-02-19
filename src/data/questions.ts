@@ -28,7 +28,7 @@ export type QuestionOption = {
 
 export type Question = {
   id: number;
-  dimension: "D1" | "D2" | "D3" | "D4" | "D5";
+  dimension: "D1" | "D2" | "D3" | "D4" | "D5" | "MBTI";
   text: string;
   options: QuestionOption[];
 };
@@ -316,6 +316,46 @@ export const QUESTIONS: Question[] = [
       { id: "B", text: "变成最熟悉的陌生人，感情淡化", scores: { d1: 0, d2: 1, d3: 1, d4: 0, d5: 3 } },
       { id: "C", text: "失去自我，活成对方想要的样子", scores: { d1: 2, d2: 0, d3: 3, d4: 2, d5: 0 } },
       { id: "D", text: "错过了更合适的人", scores: { d1: 2, d2: 1, d3: 1, d4: 3, d5: 1 } },
+    ],
+  },
+
+  // ========== 十六型人格（MBTI）维度 Q26-Q29 ==========
+  // 这4道题专门测量 E/I、N/S、T/F、J/P 四个维度
+  // 选项得分对D1-D5无贡献（全为0），仅用于 calculateMBTI() 函数
+  {
+    id: 26,
+    dimension: "MBTI",
+    text: "充完电最快的方式是？",
+    options: [
+      { id: "A", text: "约朋友出去玩，热闹一圈回来精神焕发", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+      { id: "B", text: "一个人待着，安静地做自己喜欢的事", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+    ],
+  },
+  {
+    id: 27,
+    dimension: "MBTI",
+    text: "恋爱时你更相信哪个？",
+    options: [
+      { id: "A", text: "感觉和直觉，这个人就是对的就是对的", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+      { id: "B", text: "具体行动，TA 为我做了什么才算数", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+    ],
+  },
+  {
+    id: 28,
+    dimension: "MBTI",
+    text: "朋友向你倾诉情感困惑，你第一反应是？",
+    options: [
+      { id: "A", text: "帮TA分析原因，理清问题逻辑", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+      { id: "B", text: "先共情TA的情绪，让TA感受到被理解", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+    ],
+  },
+  {
+    id: 29,
+    dimension: "MBTI",
+    text: "规划一次约会，你更倾向于？",
+    options: [
+      { id: "A", text: "提前做好攻略，时间地点都确定好", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
+      { id: "B", text: "大致有个方向，到了再随机应变", scores: { d1: 0, d2: 0, d3: 0, d4: 0, d5: 0 } },
     ],
   },
 ];

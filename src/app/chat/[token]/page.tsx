@@ -40,6 +40,7 @@ export default function ChatPage() {
   const [error, setError] = useState("");
   const [insufficientInfo, setInsufficientInfo] = useState<InsufficientInfo | null>(null);
   const [isNight, setIsNight] = useState(false);
+  const [deepMode, setDeepMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -103,7 +104,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, message: msg, history, coupleMode }),
+        body: JSON.stringify({ token, message: msg, history, coupleMode, deepMode }),
       });
 
       if (!res.ok) {
@@ -324,8 +325,32 @@ export default function ChatPage() {
       )}
 
       {/* 输入框 */}
-      <div className={`border-t px-4 py-3 ${inputAreaClass}`}>
-        <div className="flex items-end gap-2 mb-1">
+      <div className={`border-t px-4 pt-2 pb-3 ${inputAreaClass}`}>
+        {/* 模式切换 */}
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`text-xs ${isNight ? "text-gray-500" : "text-gray-400"}`}>分析模式：</span>
+          <button
+            onClick={() => setDeepMode(false)}
+            className={`text-xs px-3 py-1 rounded-full transition-all ${
+              !deepMode
+                ? "bg-rose-400 text-white font-medium"
+                : isNight ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            常规分析 · 1次
+          </button>
+          <button
+            onClick={() => setDeepMode(true)}
+            className={`text-xs px-3 py-1 rounded-full transition-all ${
+              deepMode
+                ? "bg-rose-400 text-white font-medium"
+                : isNight ? "bg-gray-700 text-gray-400" : "bg-gray-100 text-gray-500"
+            }`}
+          >
+            深度分析 · 2次
+          </button>
+        </div>
+        <div className="flex items-end gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -343,8 +368,8 @@ export default function ChatPage() {
             {isStreaming ? "..." : "发送"}
           </button>
         </div>
-        <p className={`text-xs text-center ${isNight ? "text-gray-600" : "text-gray-300"}`}>
-          浅度问题消耗1次 · 深度分析消耗2次 · 余额 {lingxiLeft ?? "?"} 次
+        <p className={`text-xs text-center mt-1 ${isNight ? "text-gray-600" : "text-gray-300"}`}>
+          余额 {lingxiLeft ?? "?"} 次灵犀
         </p>
       </div>
     </main>
