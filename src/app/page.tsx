@@ -1,8 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
+/**
+ * 基于日期计算"已解锁人数"：
+ * - 基准日 2026-02-19 = 3847 人
+ * - 每天增加 30~120 人，使用确定性公式（相同日期永远得相同结果）
+ * - 公式：dailyGrowth = 35 + (dayIndex * 47 + dayIndex² * 3) % 85
+ */
+function getDynamicUnlockCount(): number {
+  const BASE_DATE = new Date("2026-02-19T00:00:00+08:00").getTime();
+  const BASE_COUNT = 3847;
+  const daysDiff = Math.max(
+    0,
+    Math.floor((Date.now() - BASE_DATE) / (1000 * 60 * 60 * 24))
+  );
+  let count = BASE_COUNT;
+  for (let d = 0; d < daysDiff; d++) {
+    count += 35 + ((d * 47 + d * d * 3) % 85);
+  }
+  return count;
+}
 
 /**
  * 落地页 v2.3
@@ -419,12 +439,8 @@ function PaymentModal({ plan, onClose, onPaid }: PaymentModalProps) {
 // 主页面
 // ─────────────────────────────────────────────────────────────
 export default function HomePage() {
-  const [selectedPlan, setSelectedPlan] = useState<string>("couple");
-  /** true=购买引导弹窗；支付渠道打通后改为收款码弹窗 */
-  const [showBuyGuide, setShowBuyGuide] = useState(false);
   const router = useRouter();
-
-  const currentPlan = PLANS.find((p) => p.id === selectedPlan) ?? PLANS[1];
+  const unlockCount = useMemo(() => getDynamicUnlockCount(), []);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
@@ -455,7 +471,7 @@ export default function HomePage() {
       <section className="pt-12 pb-6 px-6 text-center">
         <div className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-500 text-xs font-medium px-4 py-1.5 rounded-full mb-6">
           <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-pulse" />
-          首周特惠 · 已有 3,847 人解锁报告
+          首周特惠 · 已有 {unlockCount.toLocaleString("zh-CN")} 人解锁报告
         </div>
 
         <h1 className="text-4xl font-bold mb-3 text-gradient leading-tight">
@@ -471,6 +487,17 @@ export default function HomePage() {
           <br />
           <span className="text-rose-400 font-medium">双人版：帮你读懂 TA，让 TA 理解你</span>
         </p>
+      </section>
+
+      {/* ── 主 CTA：激活码入口（跟随标题，目标用户基本都有码） ── */}
+      <section className="px-6 pb-6">
+        <div className="max-w-sm mx-auto">
+          <Link href="/activate">
+            <button className="btn-primary w-full py-4 text-base font-semibold">
+              已有激活码，立刻开始 →
+            </button>
+          </Link>
+        </div>
       </section>
 
       {/* 定价卡片（点击选择，高亮显示） */}
@@ -630,25 +657,42 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── CTA 区：立即购买（主）+ 已有激活码（次） ── */}
+      {/* ── 购买引导：还没有激活码的用户去小红书 / 闲鱼购买 ── */}
       <section className="px-6 pb-8">
-        <div className="max-w-sm mx-auto space-y-3">
-          {/* 主按钮：立即购买 → 跳转购买引导（支付渠道待开通） */}
-          <button
-            onClick={() => setShowBuyGuide(true)}
-            className="btn-primary w-full py-4 text-base font-semibold"
-          >
-            立即购买 · {currentPlan.emoji} {currentPlan.name} ¥{currentPlan.price} →
-          </button>
+        <div className="max-w-sm mx-auto">
+          <p className="text-center text-xs text-gray-400 mb-4">还没有激活码？在这里购买 ↓</p>
+          <div className="space-y-3">
+            {/* 小红书 */}
+            <a
+              href="https://www.xiaohongshu.com/search_result?keyword=%E6%AD%A3%E7%BC%98%E5%BC%95%E5%8A%9B"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-3.5 transition-colors hover:bg-red-100"
+            >
+              <span className="text-2xl flex-shrink-0">📕</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-red-600">小红书</div>
+                <div className="text-xs text-gray-400 mt-0.5">搜索「正缘引力」· 私信选套餐付款</div>
+              </div>
+              <span className="text-red-400 text-sm flex-shrink-0">→</span>
+            </a>
 
-          {/* 次级：已有激活码 */}
-          <Link href="/activate">
-            <button className="w-full py-3 text-sm font-medium text-rose-400 border border-rose-200 rounded-2xl bg-white hover:bg-rose-50 transition-colors">
-              已有激活码，直接开始 →
-            </button>
-          </Link>
-
-          <p className="text-center text-gray-300 text-xs">
+            {/* 闲鱼 */}
+            <a
+              href="https://www.goofish.com/search?q=%E6%AD%A3%E7%BC%98%E5%BC%95%E5%8A%9B"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3.5 transition-colors hover:bg-orange-100"
+            >
+              <span className="text-2xl flex-shrink-0">🐟</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-bold text-orange-600">闲鱼</div>
+                <div className="text-xs text-gray-400 mt-0.5">搜索「正缘引力」· 下单后自动发码</div>
+              </div>
+              <span className="text-orange-400 text-sm flex-shrink-0">→</span>
+            </a>
+          </div>
+          <p className="text-center text-gray-300 text-xs mt-4">
             首周特惠 · 名额有限 · 随时恢复原价
           </p>
         </div>
@@ -678,17 +722,6 @@ export default function HomePage() {
       <footer className="text-center text-gray-300 text-xs pb-8">
         <p>© 2026 正缘引力 · 仅供娱乐参考，不构成专业心理建议</p>
       </footer>
-
-      {/* 购买引导弹窗（支付渠道待开通期间使用） */}
-      {showBuyGuide && (
-        <BuyGuideModal
-          plan={currentPlan}
-          onClose={() => setShowBuyGuide(false)}
-        />
-      )}
-
-      {/* 收款码支付弹窗（留存备用，支付渠道开通后切换） */}
-      {/* showBuyGuide 替换为 showPayModal，并还原 state 名称即可启用 */}
 
     </main>
   );
