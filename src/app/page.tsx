@@ -81,9 +81,9 @@ export default function HomePage() {
           正缘引力
         </h1>
 
-        {/* 副标题：强调「读懂彼此」而不只是找城市 */}
+        {/* 副标题 */}
         <h2 className="text-xl font-semibold text-gray-700 mb-3 leading-snug">
-          你的恋爱人格，值得被读懂
+          发现你的正缘
         </h2>
 
         {/* 描述 */}

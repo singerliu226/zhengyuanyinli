@@ -41,6 +41,8 @@ export default function ChatPage() {
   const [insufficientInfo, setInsufficientInfo] = useState<InsufficientInfo | null>(null);
   const [isNight, setIsNight] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
+  const [partnerHasCompleted, setPartnerHasCompleted] = useState(false);
+  const [partnerPersonalityType, setPartnerPersonalityType] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,6 +66,12 @@ export default function ChatPage() {
       setLingxiLeft(data.lingxiLeft);
       setPersonalityType(data.personalityType);
       setCityMatch(data.cityMatch);
+
+      // 双人模式：记录伴侣完成状态（供 UI 提示用）
+      if (coupleMode && data.hasPartner && data.partnerInfo) {
+        setPartnerHasCompleted(true);
+        setPartnerPersonalityType(data.partnerInfo.personalityType ?? "");
+      }
 
       const isNightNow = (new Date().getUTCHours() + 8) % 24 >= 23 ||
                          (new Date().getUTCHours() + 8) % 24 < 6;
@@ -189,7 +197,7 @@ export default function ChatPage() {
   return (
     <main className={`min-h-screen flex flex-col ${bgClass}`}>
       {/* 顶部导航 */}
-      <header className={`border-b px-6 py-4 flex items-center justify-between ${headerClass}`}>
+      <header className={`border-b px-6 py-3 flex items-center justify-between ${headerClass}`}>
         <Link href={`/result/${token}`} className={`text-sm ${isNight ? "text-gray-400" : "text-gray-400"}`}>
           ← 报告
         </Link>
@@ -211,13 +219,29 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* 双人同频：伴侣状态提示条 */}
+      {coupleMode && partnerHasCompleted && (
+        <div className={`px-6 py-2 text-center text-xs ${isNight ? "bg-gray-800 text-gray-400" : "bg-rose-50 text-rose-500"}`}>
+          ✅ TA 已经完成了测试
+          {partnerPersonalityType && (
+            <span className="ml-1 font-medium">· {partnerPersonalityType}</span>
+          )}
+          <span className={`ml-1 ${isNight ? "text-gray-500" : "text-rose-300"}`}>· 缘缘已读取双方报告</span>
+        </div>
+      )}
+      {coupleMode && !partnerHasCompleted && (
+        <div className={`px-6 py-2 text-center text-xs ${isNight ? "bg-gray-800 text-gray-400" : "bg-amber-50 text-amber-500"}`}>
+          ⏳ 等待对方完成测试后，双人同频才能发挥最大效果
+        </div>
+      )}
+
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "assistant" && (
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-400 to-pink-400 flex items-center justify-center text-white text-xs mr-2 flex-shrink-0 mt-1">
-                城
+                缘
               </div>
             )}
             <div

@@ -178,14 +178,15 @@ ${knowledgeSnippets ? `【参考知识库】\n${knowledgeSnippets}\n` : ""}
 
 /**
  * 构建双人同频模式 System Prompt
- * 角色：关系中介"缘缘"，同时拥有两人的档案，协助两人沟通和理解彼此
- * 核心价值：不偏向任何一方，用数据说话，帮助双方找到共同语言
+ * 角色：关系中介"缘缘"，同时拥有两人的档案 + 双方历史问答，协助双方沟通
+ * 核心价值：不偏向任何一方，灵活调用双方的隐性信息，但不直接透露对方原话
  */
 function buildCoupleModeSystemPrompt(
   selfContext: UserContext,
   partnerContext: UserContext,
   knowledgeSnippets: string,
-  nightMode: boolean
+  nightMode: boolean,
+  partnerChatSummary?: string
 ): string {
   const selfPersonality = getPersonalityById(toPersonalityId(selfContext.personalityType));
   const partnerPersonality = getPersonalityById(toPersonalityId(partnerContext.personalityType));
@@ -209,6 +210,11 @@ function buildCoupleModeSystemPrompt(
     ? "\n【深夜模式】现在是深夜，语气格外温柔，回答中带有更多安抚和陪伴感。"
     : "";
 
+  // 对方的问答摘要作为"幕后信息"：AI 可灵活调用，但不能直接引用对方原话
+  const partnerContext_note = partnerChatSummary
+    ? `\n【TA的近期烦恼（背景参考，请勿直接引用或告知提问者）】\n${partnerChatSummary}\n你可以据此灵活调整建议方向，让回答更有针对性，但要表现得像你"凭直觉"感知到了，而不是说"我看到了TA说的"。`
+    : "";
+
   return `你是「缘缘」，一位专业的恋爱关系中介顾问。现在你正在帮助一对伴侣（或朋友）进行深度的关系探索对话。你同时拥有双方的人格档案，你的目标是帮助他们理解彼此、找到沟通方式，而不是偏向任何一方。${nightNote}
 
 【发言者档案】
@@ -222,7 +228,7 @@ function buildCoupleModeSystemPrompt(
 - 最适城市：${partnerContext.cityMatch}
 - 特质：${partnerDesc}...
 - 5维度：生活节奏${partnerContext.scores.d1}，社交${partnerContext.scores.d2}，审美${partnerContext.scores.d3}，价值观${partnerContext.scores.d4}，依恋${partnerContext.scores.d5}
-
+${partnerContext_note}
 ${compatInfo}
 
 ${knowledgeSnippets ? `【参考知识库】\n${knowledgeSnippets}\n` : ""}
@@ -230,8 +236,8 @@ ${knowledgeSnippets ? `【参考知识库】\n${knowledgeSnippets}\n` : ""}
 【对话原则】
 1. 用双方的实际数据解释分歧的根源，让"道理"有据可查
 2. 不评判谁对谁错，而是说明"这是两种不同人格的自然反应"
-3. 为双方提供具体可操作的沟通建议，而非泛泛而谈
-4. 引导双方看到彼此的互补价值，而不只是冲突
+3. 如果你掌握了对方的问题背景，可以主动引导提问者从对方视角思考，但不透露具体信息来源
+4. 为双方提供具体可操作的沟通建议，而非泛泛而谈
 5. 语气温柔、中立、有智慧，像一个既懂心理学又懂爱情的朋友
 6. 回答控制在350字以内`;
 }
@@ -260,24 +266,31 @@ export async function streamChat(
 
 /**
  * 流式 AI 问答 - 双人同频模式
- * 同时读取双方档案，AI 扮演关系中介角色
+ *
+ * 升级点：
+ * - 接收对方最近的聊天记录摘要（partnerChatSummary），注入到系统提示的"幕后信息"区
+ * - AI 可灵活调用该背景信息，但不直接透露原话，从而发挥真实的中介作用
  */
 export async function streamCoupleChat(
   selfContext: UserContext,
   partnerContext: UserContext,
   history: ChatMessage[],
   newMessage: string,
-  nightMode = false
+  nightMode = false,
+  partnerChatSummary?: string
 ): Promise<ReadableStream<Uint8Array>> {
   log.info("开始双人同频 AI 对话", {
     self: selfContext.personalityType,
     partner: partnerContext.personalityType,
     nightMode,
+    hasPartnerContext: !!partnerChatSummary,
   });
 
   const personalityId = toPersonalityId(selfContext.personalityType);
   const knowledge = retrieveKnowledge(newMessage, personalityId);
-  const systemPrompt = buildCoupleModeSystemPrompt(selfContext, partnerContext, knowledge, nightMode);
+  const systemPrompt = buildCoupleModeSystemPrompt(
+    selfContext, partnerContext, knowledge, nightMode, partnerChatSummary
+  );
 
   return buildStream(systemPrompt, history, newMessage);
 }

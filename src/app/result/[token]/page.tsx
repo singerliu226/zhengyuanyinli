@@ -22,7 +22,11 @@ type ReportData = {
     idealType: string;
     advantages: string[];
     warnings: string[];
-    compatibility: { matchPersonalityName: string; content: string };
+    compatibility: {
+      matchPersonalityName: string;
+      content: string;
+      mbtiCompatible?: { types: string[]; note: string };
+    };
     chatInvite: string;
   };
 };
@@ -100,12 +104,16 @@ export default function ResultPage() {
 
   function handleShare() {
     if (!info) return;
-    const text = `我的恋爱人格是「${info.report.personalityName}」，最适合在${info.report.cityMatch}谈恋爱！`;
+    const isPersonal = info.planType === "personal";
+    // 单人版：分享公开简版页（不含灵犀/完整报告）；双人版：分享完整结果页
+    const shareUrl = isPersonal
+      ? `${window.location.origin}/share/${token}`
+      : window.location.href;
+    const text = `我测了正缘引力，我的恋爱人格是「${info.report.personalityName}」${info.report.mbtiType ? `·${info.report.mbtiType}` : ""}，快来看看！`;
     if (navigator.share) {
-      navigator.share({ title: "正缘引力测试结果", text, url: window.location.href });
+      navigator.share({ title: "正缘引力 · 恋爱人格测试", text, url: shareUrl });
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert("链接已复制，可分享给朋友～");
+      navigator.clipboard.writeText(shareUrl).then(() => alert("链接已复制，可分享给朋友～"));
     }
   }
 
@@ -342,7 +350,27 @@ export default function ResultPage() {
         <div className="bg-purple-50 rounded-3xl p-6 shadow-sm border border-purple-100">
           <h3 className="font-bold text-gray-800 mb-1">💑 最佳匹配人格</h3>
           <p className="text-purple-500 font-semibold text-lg mb-3">{report.modules.compatibility.matchPersonalityName}</p>
-          <p className="text-gray-600 text-sm leading-relaxed">{report.modules.compatibility.content}</p>
+          <p className="text-gray-600 text-sm leading-relaxed mb-4">{report.modules.compatibility.content}</p>
+
+          {/* MBTI 兼容参考 */}
+          {report.modules.compatibility.mbtiCompatible && (
+            <div className="bg-white/70 rounded-2xl p-4 border border-purple-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">🧬</span>
+                <span className="text-xs font-semibold text-purple-600">MBTI 参考匹配</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {report.modules.compatibility.mbtiCompatible.types.map((t) => (
+                  <span key={t} className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-600">
+                    {t}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {report.modules.compatibility.mbtiCompatible.note}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* 7. 对话引导区（报告末尾，引导点击缘缘） */}

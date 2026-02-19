@@ -37,6 +37,11 @@ export type PersonalityType = {
   cities: string[];
   vector: PersonalityVector;
   bestMatchId: string;
+  /**
+   * 与本人格最契合的 MBTI 类型及简短说明
+   * 用于结果页「最佳匹配人格」模块的 MBTI 参考展示
+   */
+  mbtiCompatible: { types: string[]; note: string };
   report: ReportContent;
 };
 
@@ -49,6 +54,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["北京", "深圳"],
     vector: { d1: 90, d2: 70, d3: 15, d4: 80, d5: 20 },
     bestMatchId: "stable_guardian",
+    mbtiCompatible: {
+      types: ["ISTJ", "ISFJ", "ESTJ"],
+      note: "你的激情与行动力，最能被踏实稳重的 ISTJ/ISFJ 接住；ESTJ 则能与你并驾齐驱、目标一致",
+    },
     report: {
       personality: `你是那种走进房间就能让气场变热的人。你对生活有极强的驱动力——不是因为你焦虑，而是因为你真的热爱那种向前冲的感觉。你的恋爱方式同样如此：你不喜欢暧昧、不喜欢拖沓，喜欢就直接，想要就追。在一段关系里，你是天然的「发起者」——约会的地点你来定，浪漫的惊喜你来制造，问题出现了你先开口谈。
 
@@ -86,6 +95,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["上海", "杭州"],
     vector: { d1: 70, d2: 40, d3: 65, d4: 90, d5: 20 },
     bestMatchId: "inner_core",
+    mbtiCompatible: {
+      types: ["INTJ", "INTP", "INFJ"],
+      note: "同样追求深度与品质的 INTJ 最懂你的标准；INFJ 能用情感温度融化你的理性外壳；INTP 带来你所缺的发散思维",
+    },
     report: {
       personality: `你在感情里最大的特质是：清醒。你不会被荷尔蒙完全支配，你会观察、会分析、会给自己时间判断。这听起来冷静，但实际上，你只是不愿意把自己的情感浪费在不值得的地方。
 
@@ -121,6 +134,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["成都", "重庆"],
     vector: { d1: 20, d2: 65, d3: 50, d4: 20, d5: 85 },
     bestMatchId: "stable_guardian",
+    mbtiCompatible: {
+      types: ["ISFJ", "ESFJ", "INFJ"],
+      note: "ISFJ 的细腻守护与你的温柔相互滋养；ESFJ 同样重视情感表达和家庭氛围；INFJ 能给你深层的精神陪伴",
+    },
     report: {
       personality: `你是恋爱里的「人间烟火」。你不追求轰轰烈烈，你追求的是那种踏实的、日复一日的温暖。一顿热气腾腾的饭、一句「你到家了吗」、对方记得你说过的某个细节——这些在别人眼里微不足道的事，对你来说就是爱最真实的形态。
 
@@ -156,6 +173,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["大理", "丽江"],
     vector: { d1: 15, d2: 10, d3: 90, d4: 50, d5: 45 },
     bestMatchId: "free_explorer",
+    mbtiCompatible: {
+      types: ["ENFP", "ENTP", "INFP"],
+      note: "ENFP 的热情能点燃你的世界、拉你走出孤独；ENTP 的好奇心与你的深度碰撞出最强火花；INFP 是能真正读懂你的灵魂伴侣",
+    },
     report: {
       personality: `你对感情的期待，从一开始就和大多数人不一样。你不需要一段「正常」的关系，你需要的是一个能真正进入你内心世界的人——那个世界很深，进去不容易，但进去了就再也不想出来。
 
@@ -191,6 +212,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["厦门", "珠海"],
     vector: { d1: 50, d2: 55, d3: 80, d4: 50, d5: 20 },
     bestMatchId: "literary_loner",
+    mbtiCompatible: {
+      types: ["INFP", "INFJ", "ISFP"],
+      note: "INFP 的感性与深度让你愿意停下来；INFJ 能给你方向感而不束缚你；ISFP 同样追求真实体验，和你一起探索世界最合适",
+    },
     report: {
       personality: `你对感情的态度里有一种天然的轻盈。你喜欢相遇、喜欢新鲜感、喜欢那种「我不知道接下来会发生什么」的状态。但这不是因为你不认真，而是因为你真的相信最好的事情往往是计划之外的。
 
@@ -226,6 +251,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["西安", "沈阳"],
     vector: { d1: 20, d2: 40, d3: 40, d4: 70, d5: 75 },
     bestMatchId: "homey_tender",
+    mbtiCompatible: {
+      types: ["ESFJ", "ENFJ", "INFJ"],
+      note: "ESFJ 带来温度和仪式感，完美补上你不善表达的短板；ENFJ 善于引导你表达情感；INFJ 的深刻与你的踏实相互成就",
+    },
     report: {
       personality: `你是那种让人放心的人。你不会说很多甜言蜜语，但你的行动会告诉对方「我在」。你把承诺当回事，你答应的事情会做到，你进入一段关系是真的想走长远的。
 
@@ -261,6 +290,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["广州", "南京"],
     vector: { d1: 70, d2: 90, d3: 15, d4: 50, d5: 50 },
     bestMatchId: "urban_fuel",
+    mbtiCompatible: {
+      types: ["ENTJ", "ESTP", "ENTP"],
+      note: "ENTJ 的魄力与你的热情组成无敌搭档；ESTP 同样活在当下、充满行动力；ENTP 的机智让你们永远有聊不完的话",
+    },
     report: {
       personality: `你是一个天然的「中心」。你不是刻意去成为焦点，你就是那种走进一个房间，房间的气氛就变得不一样的人。你的能量感染别人，你的幽默让人放松，你的热情让陌生人迅速变成朋友。
 
@@ -296,6 +329,10 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["苏州", "无锡"],
     vector: { d1: 50, d2: 15, d3: 70, d4: 75, d5: 45 },
     bestMatchId: "refined_rational",
+    mbtiCompatible: {
+      types: ["ENFP", "ENTP", "INTJ"],
+      note: "ENFP 的外向热情能打开你的内心而不令你窒息；ENTP 的智识深度与你旗鼓相当；INTJ 则是最懂你的安静盟友",
+    },
     report: {
       personality: `你是一个很难被看穿的人，但一旦被看穿，就很难忘记。你不需要外在的热闹来证明自己的存在，你有一种稳定的内核——你知道自己是谁，你知道自己想要什么，你不需要通过别人的反应来确认自己的价值。
 

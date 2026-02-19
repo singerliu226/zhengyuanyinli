@@ -58,6 +58,10 @@ export default function RechargePage() {
   const [pollCount, setPollCount] = useState(0);
   const [pollResult, setPollResult] = useState<"pending" | "success" | "timeout">("pending");
   const [error, setError] = useState("");
+  const [testSuccess, setTestSuccess] = useState<number | null>(null);
+
+  const isDev = process.env.NODE_ENV === "development" ||
+    (typeof window !== "undefined" && window.location.hostname === "localhost");
 
   const isReturnFromPayment = searchParams.get("status") === "success";
   const pkgName = searchParams.get("pkg") ?? "";
@@ -151,6 +155,28 @@ export default function RechargePage() {
   // 保存当前余额到 sessionStorage，跳回后用来比对是否到账
   async function startPollingAfterRedirect(baseline: number) {
     sessionStorage.setItem(`lingxi_baseline_${token}`, String(baseline));
+  }
+
+  /** 测试支付：跳过支付网关，直接充值（仅本地开发使用） */
+  async function handleTestPay() {
+    if (isProcessing) return;
+    setIsProcessing(true);
+    setError("");
+    try {
+      const res = await fetch("/api/payment/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, packageId: selectedPkg }),
+      });
+      const data = await res.json();
+      if (!data.success) { setError(data.error ?? "测试支付失败"); return; }
+      setLingxiLeft(data.newBalance);
+      setTestSuccess(data.lingxiAdded);
+    } catch {
+      setError("网络异常");
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   // 返回页面时读取 baseline
@@ -293,19 +319,53 @@ export default function RechargePage() {
       {/* 支付按钮 */}
       {!polling && pollResult !== "success" && (
         <div className="px-6 pb-8">
-          <div className="max-w-sm mx-auto">
-            <button
-              onClick={handlePay}
-              disabled={isProcessing}
-              className="btn-primary w-full py-4 text-base font-semibold"
-            >
-              {isProcessing
-                ? "正在创建订单..."
-                : `支付 ¥${PACKAGES.find((p) => p.id === selectedPkg)?.price ?? "--"} · 支付宝`}
-            </button>
-            <p className="text-center text-gray-400 text-xs mt-3">
-              支付完成后自动到账 · 如有问题请联系客服
-            </p>
+          <div className="max-w-sm mx-auto space-y-3">
+
+            {/* 测试支付成功提示 */}
+            {testSuccess !== null && (
+              <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
+                <div className="text-2xl mb-1">🎉</div>
+                <p className="text-sm font-medium text-green-700">测试充值成功！</p>
+                <p className="text-xs text-green-500 mt-1">
+                  已添加 {testSuccess} 次灵犀，当前余额 {lingxiLeft} 次
+                </p>
+                <Link href={`/chat/${token}`}>
+                  <button className="mt-3 w-full py-2.5 text-sm bg-green-500 text-white rounded-xl">
+                    去找缘缘对话 →
+                  </button>
+                </Link>
+              </div>
+            )}
+
+            {/* 正式支付按钮 */}
+            {testSuccess === null && (
+              <button
+                onClick={handlePay}
+                disabled={isProcessing}
+                className="btn-primary w-full py-4 text-base font-semibold"
+              >
+                {isProcessing
+                  ? "正在创建订单..."
+                  : `支付 ¥${PACKAGES.find((p) => p.id === selectedPkg)?.price ?? "--"} · 支付宝`}
+              </button>
+            )}
+
+            {/* 测试支付按钮（仅本地开发显示） */}
+            {isDev && testSuccess === null && (
+              <button
+                onClick={handleTestPay}
+                disabled={isProcessing}
+                className="w-full py-3 text-sm border-2 border-dashed border-amber-300 text-amber-600 rounded-2xl bg-amber-50 font-medium"
+              >
+                🧪 测试充值（跳过支付，仅开发环境）
+              </button>
+            )}
+
+            {testSuccess === null && (
+              <p className="text-center text-gray-400 text-xs">
+                支付完成后自动到账 · 如有问题请联系客服
+              </p>
+            )}
           </div>
         </div>
       )}

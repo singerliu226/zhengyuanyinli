@@ -76,24 +76,24 @@ export default function CoupleJoinPage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 flex flex-col items-center justify-center px-6">
         <div className="max-w-sm w-full bg-white rounded-3xl p-8 shadow-md text-center">
-          <div className="text-5xl mb-4">💌</div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">你的伴侣邀请你</h1>
+          <div className="text-5xl mb-4">🌸</div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">有人想和你一起探索</h1>
           <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-            TA 已经完成了「正缘引力」测试，想和你一起开启<strong>双人同频模式</strong>——
-            让 AI 帮你们找到彼此的沟通频道。
+            TA 完成了「正缘引力」测试，想邀请你也来做一份——<br />
+            两份报告在手，AI 缘缘能帮你们读懂彼此。
           </p>
           <div className="bg-rose-50 rounded-2xl p-4 mb-6 text-left space-y-2">
-            <p className="text-xs text-gray-600">📝 完成25道题（约3分钟）</p>
+            <p className="text-xs text-gray-600">📝 25道题 + MBTI，约3分钟完成</p>
             <p className="text-xs text-gray-600">📊 获得你的专属恋爱人格报告</p>
-            <p className="text-xs text-gray-600">💕 与 TA 开启双人同频 AI 对话</p>
+            <p className="text-xs text-gray-600">💕 双人同频 AI 对话，理解彼此更深一层</p>
           </div>
           <button
             onClick={() => setPhase("test")}
             className="btn-primary w-full py-4 text-base"
           >
-            开始我的测试 →
+            开始测试 →
           </button>
-          <p className="text-xs text-gray-400 mt-3">此链接仅限一人使用，请勿转发</p>
+          <p className="text-xs text-gray-400 mt-3">此链接仅限一次使用 · 结果仅你可见</p>
         </div>
       </main>
     );

@@ -115,19 +115,65 @@ export async function POST(req: NextRequest) {
     let aiStream: ReadableStream<Uint8Array>;
 
     if (coupleMode && result.partnerId) {
-      // 双人同频模式：加载伴侣档案
+      // ── 双人同频模式 ──────────────────────────────────────────────
+      // 1. 加载伴侣档案
       const partnerResult = await prisma.result.findUnique({
         where: { id: result.partnerId },
+        select: {
+          id: true,
+          personalityType: true,
+          cityMatch: true,
+          scores: true,
+          lingxi: true,
+        },
       });
 
       if (partnerResult) {
+        // 2. 同步扣除伴侣灵犀（若余额充足则扣，不足则仅扣发起方，不阻断对话）
+        if (partnerResult.lingxi >= lingxiCost) {
+          await prisma.result.updateMany({
+            where: { id: partnerResult.id, lingxi: { gte: lingxiCost } },
+            data: { lingxi: { decrement: lingxiCost } },
+          });
+          logger.info("双人模式同步扣除伴侣灵犀", {
+            partnerResultId: partnerResult.id,
+            lingxiCost,
+          });
+        } else {
+          logger.info("伴侣灵犀不足，跳过同步扣除", {
+            partnerResultId: partnerResult.id,
+            partnerLingxi: partnerResult.lingxi,
+            lingxiCost,
+          });
+        }
+
+        // 3. 加载伴侣最近 5 条聊天记录，生成摘要供 AI 参考（不透明原文）
+        const partnerChats = await prisma.chat.findMany({
+          where: { resultId: partnerResult.id },
+          orderBy: { createdAt: "desc" },
+          take: 6,
+          select: { role: true, content: true },
+        });
+        // 倒序还原时间线，过滤 AI 回复只取用户提问，生成简短摘要
+        const partnerQuestions = partnerChats
+          .reverse()
+          .filter((c) => c.role === "user")
+          .map((c) => c.content)
+          .join("；");
+        const partnerChatSummary = partnerQuestions.length > 0
+          ? `TA 近期关注的问题：${partnerQuestions}`
+          : undefined;
+
         const partnerScores = partnerResult.scores as UserContext["scores"];
         const partnerContext: UserContext = {
           personalityType: partnerResult.personalityType,
           cityMatch: partnerResult.cityMatch,
           scores: partnerScores,
         };
-        aiStream = await streamCoupleChat(selfContext, partnerContext, history as ChatMessage[], message.trim(), nightMode);
+        aiStream = await streamCoupleChat(
+          selfContext, partnerContext, history as ChatMessage[],
+          message.trim(), nightMode, partnerChatSummary
+        );
       } else {
         aiStream = await streamChat(selfContext, history as ChatMessage[], message.trim(), nightMode);
       }

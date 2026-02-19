@@ -49,6 +49,8 @@ export type ReportData = {
       matchPersonalityId: string;
       matchPersonalityName: string;
       content: string;
+      /** 与本人格最契合的 MBTI 类型列表 */
+      mbtiCompatible: { types: string[]; note: string };
     };
     chatInvite: string;
   };
@@ -103,6 +105,7 @@ export function generateReport(scoringResult: ScoringResult): ReportData {
         matchPersonalityId: personality.bestMatchId,
         matchPersonalityName: bestMatch?.name ?? "待定",
         content: personality.report.compatibility,
+        mbtiCompatible: personality.mbtiCompatible,
       },
       chatInvite: personality.report.chatInvite,
     },
