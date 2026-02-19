@@ -1,18 +1,19 @@
 export const dynamic = "force-dynamic";
 
 /**
- * /api/admin - 后台管理接口 v2.1
- * 变更：emotionCoins → lingxi，generate 支持 planType 参数
+ * /api/admin - 后台管理接口 v2.2
+ * 变更：新增 findByPhone 接口，支持通过手机号查找用户后充值灵犀
  *
  * 所有请求需要通过 Authorization: Bearer {ADMIN_SECRET} 认证
  *
- * GET  /api/admin?action=stats          - 统计数据
- * GET  /api/admin?action=keys&batch=id  - 某批次激活码列表
- * GET  /api/admin?action=results        - 近50条用户结果
- * GET  /api/admin?action=payments       - 近50条支付订单
- * POST { action: 'generate', count, batchName, planType } - 批量生成激活码
- * POST { action: 'recharge', resultId, amount }           - 手动充值灵犀
- * POST { action: 'ban', code }                            - 封禁激活码
+ * GET  /api/admin?action=stats                      - 统计数据
+ * GET  /api/admin?action=keys&batch=id              - 某批次激活码列表
+ * GET  /api/admin?action=results                    - 近50条用户结果
+ * GET  /api/admin?action=payments                   - 近50条支付订单
+ * GET  /api/admin?action=findByPhone&phone=1xx      - 通过手机号查找用户（返回匹配的所有Result）
+ * POST { action: 'generate', count, batchName, planType }  - 批量生成激活码
+ * POST { action: 'recharge', resultId, amount }            - 手动充值灵犀（by Result ID）
+ * POST { action: 'ban', code }                             - 封禁激活码
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -110,6 +111,61 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ payments });
     }
 
+    /**
+     * 通过手机号查找用户
+     * 返回该手机号绑定的所有激活码及其关联的 Result（一个手机号可能激活了多张码）
+     * 查询结果按激活时间倒序排列，便于找到最近的记录
+     */
+    if (action === "findByPhone") {
+      const phone = searchParams.get("phone")?.trim();
+      if (!phone || phone.length < 7) {
+        return NextResponse.json({ error: "请输入有效的手机号" }, { status: 400 });
+      }
+
+      const keys = await prisma.cardKey.findMany({
+        where: { phone },
+        orderBy: { activatedAt: "desc" },
+        select: {
+          id: true,
+          code: true,
+          planType: true,
+          status: true,
+          activatedAt: true,
+          result: {
+            select: {
+              id: true,
+              personalityType: true,
+              cityMatch: true,
+              lingxi: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+
+      const users = keys
+        .filter((k) => k.result !== null)
+        .map((k) => ({
+          keyCode: k.code,
+          planType: k.planType,
+          keyStatus: k.status,
+          activatedAt: k.activatedAt,
+          resultId: k.result!.id,
+          personalityType: k.result!.personalityType,
+          cityMatch: k.result!.cityMatch,
+          lingxi: k.result!.lingxi,
+          resultCreatedAt: k.result!.createdAt,
+        }));
+
+      logger.info("后台手机号查找", { phone: phone.slice(0, 3) + "****", found: users.length });
+
+      return NextResponse.json({
+        found: users.length > 0,
+        count: users.length,
+        users,
+      });
+    }
+
     return NextResponse.json({ error: "未知操作" }, { status: 400 });
   } catch (err) {
     logger.error("Admin GET 接口异常", { error: (err as Error).message });
@@ -149,7 +205,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "recharge") {
-      // 手动充值灵犀（支付异常等场景的兜底）
+      /**
+       * 手动充值灵犀（by Result ID）
+       * 适用于：支付异常兜底，或管理员直接知道 Result ID 的场景
+       */
       const { resultId, amount } = body;
       if (!resultId || !amount || amount < 1 || amount > 10000) {
         return NextResponse.json({ error: "参数无效" }, { status: 400 });
@@ -160,7 +219,7 @@ export async function POST(req: NextRequest) {
         data: { lingxi: { increment: amount } },
       });
 
-      logger.info("手动充值灵犀", { resultId, amount, newBalance: result.lingxi });
+      logger.info("手动充值灵犀（by ResultId）", { resultId, amount, newBalance: result.lingxi });
       return NextResponse.json({
         success: true,
         newBalance: result.lingxi,

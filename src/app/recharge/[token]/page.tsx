@@ -5,12 +5,12 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 /**
- * 灵犀充能页
- * 流程：选套餐 → 调 /api/payment/create → 跳转虎皮椒收银台 → 支付完成跳回 → 轮询到账
- *
- * URL 参数：
- * - status=success  支付宝/微信回调后携带，显示"正在确认到账"并轮询
- * - pkg=xxx         套餐名称，用于展示
+ * 灵犀充能页 v2.1
+ * 变更：
+ * - 新增「个人扫码收款」模式（虎皮椒审核期间使用）
+ * - 虎皮椒支付通道保留，通过 NEXT_PUBLIC_PAYJS_ENABLED=true 可随时切回
+ * - 扫码模式流程：选套餐 → 展示收款码 → 用户支付并备注手机号 → 点击「已完成」→ 轮询到账
+ * - 管理员收到付款通知后，在后台用手机号查找用户并手动充值
  */
 
 const PACKAGES = [
@@ -41,10 +41,19 @@ const PACKAGES = [
     lingxi: 50,
     price: "49.9",
     original: "79.9",
-    desc: "赠送1次专属月度复盘",
+    desc: "含1次完整关系诊断（5次灵犀）",
     recommended: false,
   },
 ];
+
+/** 收款码地址，优先取环境变量，否则用 public/ 目录下的占位图 */
+const PAYMENT_QR_URL = process.env.NEXT_PUBLIC_PAYMENT_QR_URL ?? "/payment-qr.svg";
+
+/**
+ * 是否启用虎皮椒正式支付通道
+ * 审核通过后在 .env 中设置 NEXT_PUBLIC_PAYJS_ENABLED=true 即可切回
+ */
+const PAYJS_ENABLED = process.env.NEXT_PUBLIC_PAYJS_ENABLED === "true";
 
 export default function RechargePage() {
   const { token } = useParams<{ token: string }>();
@@ -59,16 +68,17 @@ export default function RechargePage() {
   const [pollResult, setPollResult] = useState<"pending" | "success" | "timeout">("pending");
   const [error, setError] = useState("");
   const [testSuccess, setTestSuccess] = useState<number | null>(null);
+  /** 用户点击「我已完成扫码支付」后进入等待态 */
+  const [qrPaid, setQrPaid] = useState(false);
 
   const isDev = process.env.NODE_ENV === "development" ||
     (typeof window !== "undefined" && window.location.hostname === "localhost");
 
   const isReturnFromPayment = searchParams.get("status") === "success";
-  const pkgName = searchParams.get("pkg") ?? "";
+
+  const currentPkg = PACKAGES.find((p) => p.id === selectedPkg) ?? PACKAGES[1];
 
   // 页面加载时获取当前余额
-  // BUG-FIX: 原版在这里也调用了 startPolling()，导致和下面 useEffect 产生双重轮询定时器；
-  // 轮询逻辑统一由第二个 useEffect 负责（它能正确读取 sessionStorage 中的 baseline）
   useEffect(() => {
     fetchLingxiLeft();
   }, []);
@@ -85,7 +95,10 @@ export default function RechargePage() {
 
   /**
    * 轮询余额直到检测到灵犀增加
-   * 最多轮询 30 次（约 60 秒），超时后提示联系客服
+   * 适用于两种场景：
+   *   1. 虎皮椒支付回调后的自动到账检测
+   *   2. 扫码收款后等待管理员手动充值
+   * 最多轮询 60 次（约 120 秒），超时后提示联系客服
    */
   async function startPolling(initialBalance?: number) {
     setPolling(true);
@@ -111,7 +124,9 @@ export default function RechargePage() {
         // 继续轮询
       }
 
-      if (count >= 30) {
+      // 扫码模式等待时间更长（管理员需要手动操作）
+      const maxPolls = PAYJS_ENABLED ? 30 : 60;
+      if (count >= maxPolls) {
         clearInterval(timer);
         setPolling(false);
         setPollResult("timeout");
@@ -119,7 +134,8 @@ export default function RechargePage() {
     }, 2000);
   }
 
-  async function handlePay() {
+  // ─── 虎皮椒支付（审核通过后使用）───────────────────────────────────────
+  async function handlePayjsPay() {
     if (!selectedPkg || isProcessing) return;
     setError("");
     setIsProcessing(true);
@@ -140,9 +156,6 @@ export default function RechargePage() {
         return;
       }
 
-      // 跳转到虎皮椒收银台（支付宝/微信）
-      // 支付完成后 PayJS 会回调 notify_url（webhook）并重定向到 callback_url
-      // 我们在 callback_url 里加了 ?status=success 参数，此页面会自动轮询
       await startPollingAfterRedirect(currentBalance);
       window.location.href = data.cashierUrl;
     } catch (err) {
@@ -157,7 +170,14 @@ export default function RechargePage() {
     sessionStorage.setItem(`lingxi_baseline_${token}`, String(baseline));
   }
 
-  /** 测试支付：跳过支付网关，直接充值（仅本地开发使用） */
+  // ─── 扫码收款模式：用户确认支付 ──────────────────────────────────────────
+  function handleQrPaid() {
+    const baseline = lingxiLeft ?? 0;
+    setQrPaid(true);
+    startPolling(baseline);
+  }
+
+  // ─── 测试支付（仅本地开发）────────────────────────────────────────────────
   async function handleTestPay() {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -179,7 +199,7 @@ export default function RechargePage() {
     }
   }
 
-  // 返回页面时读取 baseline
+  // 虎皮椒回调返回页面时读取 baseline
   useEffect(() => {
     if (isReturnFromPayment) {
       const saved = sessionStorage.getItem(`lingxi_baseline_${token}`);
@@ -188,6 +208,67 @@ export default function RechargePage() {
       startPolling(baseline);
     }
   }, [isReturnFromPayment]);
+
+  // ─── 到账成功/超时状态（两种支付模式共用）────────────────────────────────
+  const PollResult = () => {
+    if (polling) {
+      return (
+        <div className="bg-white rounded-2xl p-5 shadow-sm text-center border border-rose-100">
+          <div className="text-3xl mb-3 animate-pulse">💓</div>
+          <p className="text-sm font-medium text-gray-700">
+            {PAYJS_ENABLED ? "正在确认到账..." : "等待管理员确认到账..."}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {PAYJS_ENABLED
+              ? `预计等待 ${Math.min(pollCount * 2, 60)} 秒`
+              : "支付后将在 15 分钟内到账，请稍候"}
+          </p>
+          {!PAYJS_ENABLED && (
+            <p className="text-xs text-gray-300 mt-2">
+              到账前页面可以关闭，稍后再来查看余额
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (pollResult === "success") {
+      return (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-5 text-center">
+          <div className="text-3xl mb-2">🎉</div>
+          <p className="text-sm font-medium text-green-700">灵犀已到账！</p>
+          <p className="text-xs text-green-500 mt-1">当前余额 {lingxiLeft} 次</p>
+          <Link href={`/chat/${token}`}>
+            <button className="mt-4 w-full py-2.5 text-sm bg-green-500 text-white rounded-xl font-medium">
+              开始追问 →
+            </button>
+          </Link>
+        </div>
+      );
+    }
+
+    if (pollResult === "timeout") {
+      return (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 text-center">
+          <div className="text-3xl mb-2">⏳</div>
+          <p className="text-sm font-medium text-amber-700">还未检测到到账</p>
+          <p className="text-xs text-amber-600 mt-1 mb-4 leading-relaxed">
+            {PAYJS_ENABLED
+              ? "支付完成后一般1-3分钟到账，如超过5分钟未到账，请截图支付记录联系客服"
+              : "正在处理中，如15分钟内未到账，请截图支付记录联系客服"}
+          </p>
+          <button
+            onClick={() => { setPollResult("pending"); startPolling(); }}
+            className="w-full py-2.5 text-xs border border-amber-300 text-amber-600 rounded-xl font-medium"
+          >
+            重新检测
+          </button>
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
@@ -207,50 +288,26 @@ export default function RechargePage() {
         </div>
       )}
 
-      {/* 支付完成轮询状态 */}
+      {/* 虎皮椒回调后的轮询状态 */}
       {isReturnFromPayment && (
         <div className="px-6 mb-4">
           <div className="max-w-sm mx-auto">
-            {polling && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm text-center border border-rose-100">
-                <div className="text-2xl mb-2 animate-pulse">💓</div>
-                <p className="text-sm font-medium text-gray-700">正在确认到账...</p>
-                <p className="text-xs text-gray-400 mt-1">预计等待 {Math.min(pollCount * 2, 60)} 秒</p>
-              </div>
-            )}
-            {pollResult === "success" && (
-              <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
-                <div className="text-2xl mb-2">🎉</div>
-                <p className="text-sm font-medium text-green-700">灵犀已到账！</p>
-                <p className="text-xs text-green-500 mt-1">当前余额 {lingxiLeft} 次</p>
-                <Link href={`/chat/${token}`}>
-                  <button className="mt-3 w-full py-2.5 text-sm bg-green-500 text-white rounded-xl">
-                    开始追问 →
-                  </button>
-                </Link>
-              </div>
-            )}
-            {pollResult === "timeout" && (
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
-                <div className="text-2xl mb-2">⏳</div>
-                <p className="text-sm font-medium text-amber-700">到账验证超时</p>
-                <p className="text-xs text-amber-500 mt-1 mb-3">
-                  一般1-3分钟内到账，如超过5分钟未到账，请截图支付记录联系客服
-                </p>
-                <button
-                  onClick={() => { setPollResult("pending"); startPolling(); }}
-                  className="w-full py-2 text-xs border border-amber-300 text-amber-600 rounded-xl"
-                >
-                  重新检测
-                </button>
-              </div>
-            )}
+            <PollResult />
           </div>
         </div>
       )}
 
-      {/* 套餐选择 */}
-      {!polling && pollResult !== "success" && (
+      {/* 扫码模式：用户点击「我已支付」后的等待状态 */}
+      {qrPaid && !PAYJS_ENABLED && (
+        <div className="px-6 mb-4">
+          <div className="max-w-sm mx-auto">
+            <PollResult />
+          </div>
+        </div>
+      )}
+
+      {/* 套餐选择（未在轮询中时展示） */}
+      {!polling && pollResult !== "success" && !qrPaid && (
         <div className="px-6 pb-4">
           <div className="max-w-sm mx-auto space-y-3">
             {PACKAGES.map((pkg) => {
@@ -295,13 +352,13 @@ export default function RechargePage() {
       )}
 
       {/* 消耗规则说明 */}
-      {!polling && pollResult !== "success" && (
+      {!polling && pollResult !== "success" && !qrPaid && (
         <div className="px-6 pb-4">
           <div className="max-w-sm mx-auto bg-white/70 rounded-2xl p-4 text-xs text-gray-500 space-y-1.5">
             <p className="font-medium text-gray-600 mb-2">灵犀消耗规则</p>
             <p>💬 日常咨询（合适/类型/推荐等）：消耗 <strong>1次</strong></p>
             <p>🔍 深度分析（为什么/建议/怎么办等）：消耗 <strong>2次</strong></p>
-            <p>📋 特殊服务（月度复盘/关系诊断等）：消耗 <strong>5次</strong></p>
+            <p>🔍 关系诊断（填写基本情况，AI全面诊断）：消耗 <strong>5次</strong></p>
             <p className="text-gray-400 pt-1">灵犀次数永久有效，不限制使用期限</p>
           </div>
         </div>
@@ -316,12 +373,12 @@ export default function RechargePage() {
         </div>
       )}
 
-      {/* 支付按钮 */}
-      {!polling && pollResult !== "success" && (
+      {/* ── 支付区域 ── */}
+      {!polling && pollResult !== "success" && !qrPaid && (
         <div className="px-6 pb-8">
           <div className="max-w-sm mx-auto space-y-3">
 
-            {/* 测试支付成功提示 */}
+            {/* 测试充值成功提示 */}
             {testSuccess !== null && (
               <div className="bg-green-50 border border-green-100 rounded-2xl p-4 text-center">
                 <div className="text-2xl mb-1">🎉</div>
@@ -337,34 +394,107 @@ export default function RechargePage() {
               </div>
             )}
 
-            {/* 正式支付按钮 */}
             {testSuccess === null && (
-              <button
-                onClick={handlePay}
-                disabled={isProcessing}
-                className="btn-primary w-full py-4 text-base font-semibold"
-              >
-                {isProcessing
-                  ? "正在创建订单..."
-                  : `支付 ¥${PACKAGES.find((p) => p.id === selectedPkg)?.price ?? "--"} · 支付宝`}
-              </button>
-            )}
+              <>
+                {/* ── 模式一：个人扫码收款（虎皮椒审核期间默认使用）── */}
+                {!PAYJS_ENABLED && (
+                  <div className="bg-white rounded-3xl p-5 shadow-sm border border-rose-100">
+                    {/* 标题 */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="text-sm font-bold text-gray-800">扫码支付</p>
+                        <p className="text-xs text-gray-400 mt-0.5">微信 / 支付宝 均可</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-rose-500">¥{currentPkg.price}</div>
+                        <div className="text-xs text-gray-300 line-through">¥{currentPkg.original}</div>
+                      </div>
+                    </div>
 
-            {/* 测试支付按钮（仅本地开发显示） */}
-            {isDev && testSuccess === null && (
-              <button
-                onClick={handleTestPay}
-                disabled={isProcessing}
-                className="w-full py-3 text-sm border-2 border-dashed border-amber-300 text-amber-600 rounded-2xl bg-amber-50 font-medium"
-              >
-                🧪 测试充值（跳过支付，仅开发环境）
-              </button>
-            )}
+                    {/* 收款码 */}
+                    <div className="flex justify-center mb-4">
+                      <img
+                        src={PAYMENT_QR_URL}
+                        alt="个人收款码"
+                        width={160}
+                        height={160}
+                        className="rounded-2xl object-contain border border-gray-100 shadow-sm"
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          el.style.display = "none";
+                          const next = el.nextElementSibling as HTMLElement | null;
+                          if (next) next.style.display = "flex";
+                        }}
+                      />
+                      {/* 图片加载失败时的占位 */}
+                      <div
+                        style={{ display: "none" }}
+                        className="w-40 h-40 border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center text-center px-3"
+                      >
+                        <p className="text-xs text-gray-400 leading-relaxed">
+                          配置 <code className="text-rose-400">NEXT_PUBLIC_PAYMENT_QR_URL</code><br />
+                          或将收款码放在<br />
+                          <code className="text-rose-400">public/payment-qr.png</code>
+                        </p>
+                      </div>
+                    </div>
 
-            {testSuccess === null && (
-              <p className="text-center text-gray-400 text-xs">
-                支付完成后自动到账 · 如有问题请联系客服
-              </p>
+                    {/* 支付步骤 */}
+                    <div className="bg-rose-50 rounded-2xl px-4 py-3 mb-4 space-y-2">
+                      {[
+                        `扫码支付 ¥${currentPkg.price}（${currentPkg.name}）`,
+                        "备注你的手机号（必填，用于到账确认）",
+                        "点击下方按钮，等待灵犀到账",
+                      ].map((text, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <span className="flex-shrink-0 w-4 h-4 rounded-full bg-rose-400 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                            {i + 1}
+                          </span>
+                          <span className="text-xs text-gray-600 leading-relaxed">{text}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 已完成按钮 */}
+                    <button
+                      onClick={handleQrPaid}
+                      className="btn-primary w-full py-3.5 text-sm font-semibold"
+                    >
+                      我已完成扫码支付，等待到账 →
+                    </button>
+                  </div>
+                )}
+
+                {/* ── 模式二：虎皮椒正式支付（NEXT_PUBLIC_PAYJS_ENABLED=true 时启用）── */}
+                {PAYJS_ENABLED && (
+                  <button
+                    onClick={handlePayjsPay}
+                    disabled={isProcessing}
+                    className="btn-primary w-full py-4 text-base font-semibold"
+                  >
+                    {isProcessing
+                      ? "正在创建订单..."
+                      : `支付 ¥${currentPkg.price} · 支付宝`}
+                  </button>
+                )}
+
+                {/* 测试支付按钮（仅本地开发） */}
+                {isDev && (
+                  <button
+                    onClick={handleTestPay}
+                    disabled={isProcessing}
+                    className="w-full py-3 text-sm border-2 border-dashed border-amber-300 text-amber-600 rounded-2xl bg-amber-50 font-medium"
+                  >
+                    🧪 测试充值（跳过支付，仅开发环境）
+                  </button>
+                )}
+
+                <p className="text-center text-gray-400 text-xs">
+                  {PAYJS_ENABLED
+                    ? "支付完成后自动到账 · 如有问题请联系客服"
+                    : "支付后备注手机号 · 15分钟内到账 · 有问题联系客服"}
+                </p>
+              </>
             )}
           </div>
         </div>

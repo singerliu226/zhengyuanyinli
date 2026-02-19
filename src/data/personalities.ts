@@ -38,6 +38,11 @@ export type PersonalityType = {
   vector: PersonalityVector;
   bestMatchId: string;
   /**
+   * 本人格自身的代表性 MBTI 类型（即测试者可能属于哪些MBTI）
+   * 用于「最佳匹配人格」模块中向对方展示：你的匹配对象通常是什么MBTI
+   */
+  typicalMbti: string[];
+  /**
    * 与本人格最契合的 MBTI 类型及简短说明
    * 用于结果页「最佳匹配人格」模块的 MBTI 参考展示
    */
@@ -54,6 +59,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["北京", "深圳"],
     vector: { d1: 90, d2: 70, d3: 15, d4: 80, d5: 20 },
     bestMatchId: "stable_guardian",
+    typicalMbti: ["ENTJ", "ESTJ", "ENTP"],
     mbtiCompatible: {
       types: ["ISTJ", "ISFJ", "ESTJ"],
       note: "你的激情与行动力，最能被踏实稳重的 ISTJ/ISFJ 接住；ESTJ 则能与你并驾齐驱、目标一致",
@@ -95,6 +101,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["上海", "杭州"],
     vector: { d1: 70, d2: 40, d3: 65, d4: 90, d5: 20 },
     bestMatchId: "inner_core",
+    typicalMbti: ["INTJ", "ENTP", "INTP"],
     mbtiCompatible: {
       types: ["INTJ", "INTP", "INFJ"],
       note: "同样追求深度与品质的 INTJ 最懂你的标准；INFJ 能用情感温度融化你的理性外壳；INTP 带来你所缺的发散思维",
@@ -134,6 +141,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["成都", "重庆"],
     vector: { d1: 20, d2: 65, d3: 50, d4: 20, d5: 85 },
     bestMatchId: "stable_guardian",
+    typicalMbti: ["ISFJ", "ENFJ", "INFJ"],
     mbtiCompatible: {
       types: ["ISFJ", "ESFJ", "INFJ"],
       note: "ISFJ 的细腻守护与你的温柔相互滋养；ESFJ 同样重视情感表达和家庭氛围；INFJ 能给你深层的精神陪伴",
@@ -173,6 +181,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["大理", "丽江"],
     vector: { d1: 15, d2: 10, d3: 90, d4: 50, d5: 45 },
     bestMatchId: "free_explorer",
+    typicalMbti: ["INFP", "ISFP", "INTJ"],
     mbtiCompatible: {
       types: ["ENFP", "ENTP", "INFP"],
       note: "ENFP 的热情能点燃你的世界、拉你走出孤独；ENTP 的好奇心与你的深度碰撞出最强火花；INFP 是能真正读懂你的灵魂伴侣",
@@ -212,6 +221,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["厦门", "珠海"],
     vector: { d1: 50, d2: 55, d3: 80, d4: 50, d5: 20 },
     bestMatchId: "literary_loner",
+    typicalMbti: ["ENFP", "ENTP", "ESFP"],
     mbtiCompatible: {
       types: ["INFP", "INFJ", "ISFP"],
       note: "INFP 的感性与深度让你愿意停下来；INFJ 能给你方向感而不束缚你；ISFP 同样追求真实体验，和你一起探索世界最合适",
@@ -251,6 +261,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["西安", "沈阳"],
     vector: { d1: 20, d2: 40, d3: 40, d4: 70, d5: 75 },
     bestMatchId: "homey_tender",
+    typicalMbti: ["ISTJ", "ISFJ", "ESFJ"],
     mbtiCompatible: {
       types: ["ESFJ", "ENFJ", "INFJ"],
       note: "ESFJ 带来温度和仪式感，完美补上你不善表达的短板；ENFJ 善于引导你表达情感；INFJ 的深刻与你的踏实相互成就",
@@ -290,6 +301,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["广州", "南京"],
     vector: { d1: 70, d2: 90, d3: 15, d4: 50, d5: 50 },
     bestMatchId: "urban_fuel",
+    typicalMbti: ["ESFJ", "ENFJ", "ESTP"],
     mbtiCompatible: {
       types: ["ENTJ", "ESTP", "ENTP"],
       note: "ENTJ 的魄力与你的热情组成无敌搭档；ESTP 同样活在当下、充满行动力；ENTP 的机智让你们永远有聊不完的话",
@@ -329,6 +341,7 @@ export const PERSONALITIES: PersonalityType[] = [
     cities: ["苏州", "无锡"],
     vector: { d1: 50, d2: 15, d3: 70, d4: 75, d5: 45 },
     bestMatchId: "refined_rational",
+    typicalMbti: ["INTJ", "INFJ", "ISTP"],
     mbtiCompatible: {
       types: ["ENFP", "ENTP", "INTJ"],
       note: "ENFP 的外向热情能打开你的内心而不令你窒息；ENTP 的智识深度与你旗鼓相当；INTJ 则是最懂你的安静盟友",

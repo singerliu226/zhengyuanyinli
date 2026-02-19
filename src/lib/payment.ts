@@ -44,7 +44,7 @@ export const LINGXI_PACKAGES = [
     price: 4990,       // ¥49.90
     displayPrice: "49.9",
     originalPrice: "79.9",
-    desc: "赠送1次专属月度复盘",
+    desc: "含1次完整关系诊断（5次灵犀）",
   },
 ] as const;
 

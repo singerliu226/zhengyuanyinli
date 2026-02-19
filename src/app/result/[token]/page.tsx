@@ -26,6 +26,7 @@ type ReportData = {
       matchPersonalityName: string;
       content: string;
       mbtiCompatible?: { types: string[]; note: string };
+      matchTypicalMbti?: string[];
     };
     chatInvite: string;
   };
@@ -349,15 +350,29 @@ export default function ResultPage() {
         {/* 6. 最佳匹配人格 */}
         <div className="bg-purple-50 rounded-3xl p-6 shadow-sm border border-purple-100">
           <h3 className="font-bold text-gray-800 mb-1">💑 最佳匹配人格</h3>
-          <p className="text-purple-500 font-semibold text-lg mb-3">{report.modules.compatibility.matchPersonalityName}</p>
+
+          {/* 匹配人格名称 + 其典型MBTI（帮用户在现实中识别这类人） */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <p className="text-purple-500 font-semibold text-lg">{report.modules.compatibility.matchPersonalityName}</p>
+            {report.modules.compatibility.matchTypicalMbti && report.modules.compatibility.matchTypicalMbti.length > 0 && (
+              <div className="flex gap-1 flex-wrap">
+                {report.modules.compatibility.matchTypicalMbti.map((t) => (
+                  <span key={t} className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-200 text-purple-700">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-gray-600 text-sm leading-relaxed mb-4">{report.modules.compatibility.content}</p>
 
-          {/* MBTI 兼容参考 */}
+          {/* 适合自己的 MBTI 参考（你应该去找什么MBTI的人） */}
           {report.modules.compatibility.mbtiCompatible && (
             <div className="bg-white/70 rounded-2xl p-4 border border-purple-100">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-base">🧬</span>
-                <span className="text-xs font-semibold text-purple-600">MBTI 参考匹配</span>
+                <span className="text-xs font-semibold text-purple-600">适合你的 MBTI 类型</span>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {report.modules.compatibility.mbtiCompatible.types.map((t) => (

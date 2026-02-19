@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 /**
- * 落地页 v2.2
- * 文案改版：
- * - 主标题突出「恋爱中介」和「读懂彼此」定位，城市匹配退为钩子
- * - 隐藏礼盒限定版（保留数据结构，前端不展示）
- * - 隐藏深夜模式相关提示
- * - 双人亮点区用痛点入场，强调 AI 作为中立关系顾问的价值
+ * 落地页 v2.3
+ * 变更：
+ * - 新增个人收款码支付弹窗（虎皮椒审核期间的过渡方案）
+ * - CTA 区增加「立即购买」主按钮，点击后弹出对应版本的价格确认 + 收款码
+ * - 用户扫码支付并备注手机号，等待激活码发送
+ * - 保留「已有激活码」入口作为次级操作
  */
 
 /** 礼盒版暂时隐藏，保留数据结构方便后续上线 */
@@ -39,14 +39,146 @@ const PLANS = [
   },
 ] as const;
 
+/**
+ * 收款码图片地址
+ * 优先使用环境变量，未配置时回退到 public/ 目录下的占位图
+ * 部署时：将实际收款码图片放在 public/payment-qr.png（或通过环境变量指定外链）
+ */
+const PAYMENT_QR_URL = process.env.NEXT_PUBLIC_PAYMENT_QR_URL ?? "/payment-qr.svg";
+
+// ─────────────────────────────────────────────────────────────
+// 个人收款码支付弹窗
+// ─────────────────────────────────────────────────────────────
+interface PaymentModalProps {
+  plan: (typeof PLANS)[number];
+  onClose: () => void;
+  onPaid: () => void;
+}
+
+function PaymentModal({ plan, onClose, onPaid }: PaymentModalProps) {
+  const [paid, setPaid] = useState(false);
+
+  function handlePaid() {
+    setPaid(true);
+    // 短暂停留后跳转到激活页
+    setTimeout(onPaid, 1500);
+  }
+
+  return (
+    /* 半透明遮罩，点击遮罩关闭 */
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-t-3xl w-full max-w-sm px-6 pt-6 pb-10 animate-slide-up">
+
+        {/* 顶部拖拽条 + 关闭 */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{plan.emoji}</span>
+            <div>
+              <div className="font-bold text-gray-800 text-sm">{plan.name}</div>
+              <div className="text-xs text-gray-400">{plan.scene}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-gray-500 text-xl leading-none">×</button>
+        </div>
+
+        {/* 金额展示 */}
+        <div className="text-center mb-5">
+          <div className="text-4xl font-bold text-rose-500">¥{plan.price}</div>
+          <div className="text-xs text-gray-300 line-through mt-0.5">原价 ¥{plan.original}</div>
+        </div>
+
+        {/* 收款二维码 */}
+        <div className="flex justify-center mb-5">
+          <div className="relative">
+            <img
+              src={PAYMENT_QR_URL}
+              alt="个人收款码"
+              width={180}
+              height={180}
+              className="rounded-2xl object-contain border border-gray-100 shadow-sm"
+              onError={(e) => {
+                // 图片加载失败时显示文字占位
+                const el = e.currentTarget;
+                el.style.display = "none";
+                const next = el.nextElementSibling as HTMLElement | null;
+                if (next) next.style.display = "flex";
+              }}
+            />
+            {/* 图片加载失败时的占位 */}
+            <div
+              style={{ display: "none" }}
+              className="w-44 h-44 border-2 border-dashed border-gray-200 rounded-2xl items-center justify-center text-center px-4"
+            >
+              <div>
+                <div className="text-3xl mb-2">📱</div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  请配置<br />
+                  <code className="text-rose-400">NEXT_PUBLIC_PAYMENT_QR_URL</code><br />
+                  或将收款码放在<br />
+                  <code className="text-rose-400">public/payment-qr.png</code>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 操作步骤 */}
+        <div className="bg-rose-50 rounded-2xl px-4 py-4 mb-5 space-y-2.5">
+          {[
+            { step: "1", text: `微信 / 支付宝扫码，支付 ¥${plan.price}` },
+            { step: "2", text: "支付备注中填写你的手机号（必填）" },
+            { step: "3", text: "我们将在 15 分钟内向你发送激活码" },
+          ].map((item) => (
+            <div key={item.step} className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-rose-400 text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                {item.step}
+              </span>
+              <span className="text-xs text-gray-600 leading-relaxed">{item.text}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 已支付按钮 / 成功状态 */}
+        {paid ? (
+          <div className="text-center py-3">
+            <div className="text-2xl mb-1">🎉</div>
+            <p className="text-sm font-medium text-green-600">已收到！正在跳转...</p>
+          </div>
+        ) : (
+          <button
+            onClick={handlePaid}
+            className="btn-primary w-full py-4 text-base font-semibold"
+          >
+            我已完成支付 →
+          </button>
+        )}
+
+        <p className="text-center text-xs text-gray-300 mt-3">
+          收到激活码后，点「已有激活码」即可开始
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 主页面
+// ─────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [selectedPlan, setSelectedPlan] = useState<string>("couple");
+  const [showPayModal, setShowPayModal] = useState(false);
   const router = useRouter();
+
+  const currentPlan = PLANS.find((p) => p.id === selectedPlan) ?? PLANS[1];
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50">
 
-      {/* ── 已购买快捷入口条（置顶，买家从这里直接进入） ── */}
+      {/* ── 已购买快捷入口条（置顶） ── */}
       <div className="bg-white border-b border-rose-100 px-4 py-3 flex items-center justify-between gap-2">
         <div className="text-xs text-gray-500 flex-shrink-0">
           <span className="mr-1">🎫</span>
@@ -70,23 +202,19 @@ export default function HomePage() {
 
       {/* 顶部标题区 */}
       <section className="pt-12 pb-6 px-6 text-center">
-        {/* 活跃人数气泡 */}
         <div className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-500 text-xs font-medium px-4 py-1.5 rounded-full mb-6">
           <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-pulse" />
           首周特惠 · 已有 3,847 人解锁报告
         </div>
 
-        {/* 品牌名 */}
         <h1 className="text-4xl font-bold mb-3 text-gradient leading-tight">
           正缘引力
         </h1>
 
-        {/* 副标题 */}
         <h2 className="text-xl font-semibold text-gray-700 mb-3 leading-snug">
           发现你的正缘
         </h2>
 
-        {/* 描述 */}
         <p className="text-gray-500 text-sm max-w-xs mx-auto leading-loose">
           先测试了解你自己，才能遇见正缘
           <br />
@@ -94,7 +222,7 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* 定价卡片（仅展示个人版 + 双人版） */}
+      {/* 定价卡片（点击选择，高亮显示） */}
       <section className="px-4 py-2">
         <div className="max-w-sm mx-auto space-y-3">
           {PLANS.map((plan) => {
@@ -151,7 +279,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 双人同频核心亮点 —— 以痛点入场，而不是功能介绍 */}
+      {/* 双人同频核心亮点 */}
       <section className="px-6 py-6">
         <div className="max-w-sm mx-auto bg-gradient-to-br from-rose-50 to-pink-50 rounded-3xl p-5 border border-rose-100">
           <div className="flex items-center gap-2 mb-4">
@@ -159,7 +287,6 @@ export default function HomePage() {
             <h3 className="font-bold text-gray-800 text-sm">你们不是不爱，是频道不对</h3>
           </div>
 
-          {/* 场景化痛点 */}
           <div className="space-y-2 mb-4">
             {[
               "你需要稳定感，TA 渴望新鲜感",
@@ -173,7 +300,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* 解法 */}
           <div className="bg-white/80 rounded-2xl px-4 py-3">
             <p className="text-xs text-gray-600 leading-relaxed">
               这些分歧，背后都是人格差异。<br />
@@ -186,7 +312,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 产品四大核心：重排序突出「关系顾问」 */}
+      {/* 产品四大核心 */}
       <section className="px-6 pb-4">
         <div className="max-w-sm mx-auto space-y-3">
           {[
@@ -225,7 +351,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 用户评价：突出「读懂彼此」的真实反馈 */}
+      {/* 用户评价 */}
       <section className="px-6 py-2 pb-6">
         <div className="max-w-sm mx-auto">
           <h3 className="text-center text-xs font-medium text-gray-400 mb-3">他们说 ↓</h3>
@@ -253,18 +379,25 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA 按钮 */}
+      {/* ── CTA 区：立即购买（主）+ 已有激活码（次） ── */}
       <section className="px-6 pb-8">
-        <div className="max-w-sm mx-auto">
+        <div className="max-w-sm mx-auto space-y-3">
+          {/* 主按钮：立即购买，弹出收款码弹窗 */}
+          <button
+            onClick={() => setShowPayModal(true)}
+            className="btn-primary w-full py-4 text-base font-semibold"
+          >
+            立即购买 · {currentPlan.emoji} {currentPlan.name} ¥{currentPlan.price} →
+          </button>
+
+          {/* 次级：已有激活码 */}
           <Link href="/activate">
-            <button className="btn-primary w-full py-4 text-base font-semibold">
-              输入激活码，开始测试 →
+            <button className="w-full py-3 text-sm font-medium text-rose-400 border border-rose-200 rounded-2xl bg-white hover:bg-rose-50 transition-colors">
+              已有激活码，直接开始 →
             </button>
           </Link>
-          <p className="text-center text-gray-400 text-xs mt-3">
-            还没有激活码？小红书 / 闲鱼搜索「正缘引力」购买
-          </p>
-          <p className="text-center text-gray-300 text-xs mt-1">
+
+          <p className="text-center text-gray-300 text-xs">
             首周特惠 · 名额有限 · 随时恢复原价
           </p>
         </div>
@@ -294,6 +427,15 @@ export default function HomePage() {
       <footer className="text-center text-gray-300 text-xs pb-8">
         <p>© 2026 正缘引力 · 仅供娱乐参考，不构成专业心理建议</p>
       </footer>
+
+      {/* 收款码支付弹窗 */}
+      {showPayModal && (
+        <PaymentModal
+          plan={currentPlan}
+          onClose={() => setShowPayModal(false)}
+          onPaid={() => router.push("/activate")}
+        />
+      )}
     </main>
   );
 }

@@ -246,6 +246,84 @@ ${knowledgeSnippets ? `背景参考：\n${knowledgeSnippets}\n` : ""}
 }
 
 /**
+ * 构建关系诊断专用 System Prompt
+ *
+ * 诊断模式的定位：
+ * - 用户主动提供了关系背景信息（时长、困扰类型、当前状态描述）
+ * - AI 需要综合两人人格数据 + 用户描述，给出全面、有深度的诊断
+ * - 输出格式自然流畅，不是模板列表，但需要覆盖：根源分析、关键矛盾、改善建议
+ */
+function buildDiagnosisSystemPrompt(
+  selfContext: UserContext,
+  partnerContext?: UserContext,
+  nightMode = false
+): string {
+  const personality = getPersonalityById(toPersonalityId(selfContext.personalityType));
+  const selfDesc = personality?.report.personality.slice(0, 120) ?? "";
+
+  const partnerSection = partnerContext
+    ? `对方的报告：
+- 恋爱人格：${partnerContext.personalityType}，最适合的城市：${partnerContext.cityMatch}
+- 5维度：生活节奏 ${partnerContext.scores.d1}，社交 ${partnerContext.scores.d2}，审美 ${partnerContext.scores.d3}，价值观 ${partnerContext.scores.d4}，依恋 ${partnerContext.scores.d5}`
+    : "（对方尚未完成测试，基于单方报告进行诊断）";
+
+  // 兼容性矩阵（有双方数据时查找）
+  let compatSection = "";
+  if (partnerContext) {
+    const compat = compatibilityMatrix.matrix.find(
+      (m) =>
+        (m.types[0] === toPersonalityId(selfContext.personalityType) &&
+          m.types[1] === toPersonalityId(partnerContext.personalityType)) ||
+        (m.types[1] === toPersonalityId(selfContext.personalityType) &&
+          m.types[0] === toPersonalityId(partnerContext.personalityType))
+    );
+    if (compat) {
+      compatSection = `两人兼容性评分：${compat.score}/100\n天然优势：${compat.strengths.join("；")}\n主要挑战：${compat.challenges.join("；")}`;
+    }
+  }
+
+  const nightNote = nightMode ? "\n现在是深夜，语气更温柔，但诊断要清晰准确。" : "";
+
+  return `你是缘缘，一个深度懂感情的关系顾问。用户提交了一份关系诊断请求，你需要给出一份真正有价值的诊断。${nightNote}
+
+提问者的报告：
+- 恋爱人格：${selfContext.personalityType}，最适合的城市：${selfContext.cityMatch}
+- 特质：${selfDesc}...
+- 5维度：生活节奏 ${selfContext.scores.d1}，社交 ${selfContext.scores.d2}，审美 ${selfContext.scores.d3}，价值观 ${selfContext.scores.d4}，依恋 ${selfContext.scores.d5}
+
+${partnerSection}
+
+${compatSection ? `\n${compatSection}\n` : ""}
+
+关系诊断的写法：
+- 自然流畅，用口语写，不用列表标题和加粗
+- 结构上要覆盖三个层次：这是什么根源问题（从人格数据分析）→ 具体体现在哪里（贴近用户描述）→ 一个最核心的改善方向
+- 不要泛泛地说"你们要多沟通"，要说"你的依恋风格是XX，TA是XX，这导致了XX"这种有据可查的分析
+- 长度400-500字，让用户感觉这5次灵犀值了
+- 最后留一个问题，帮用户继续往深里想`;
+}
+
+/**
+ * 流式 AI 问答 - 关系诊断模式
+ * 用户提供关系背景信息，AI 综合双方人格数据给出全面诊断
+ */
+export async function streamDiagnosis(
+  selfContext: UserContext,
+  diagnosisMessage: string,
+  partnerContext?: UserContext,
+  nightMode = false
+): Promise<ReadableStream<Uint8Array>> {
+  log.info("开始关系诊断", {
+    self: selfContext.personalityType,
+    partner: partnerContext?.personalityType ?? "无",
+    nightMode,
+  });
+
+  const systemPrompt = buildDiagnosisSystemPrompt(selfContext, partnerContext, nightMode);
+  return buildStream(systemPrompt, [], diagnosisMessage, 800);
+}
+
+/**
  * 流式 AI 问答 - 单人模式
  */
 export async function streamChat(
@@ -300,11 +378,13 @@ export async function streamCoupleChat(
 
 /**
  * 内部：构建 OpenAI 流并转换为 Web ReadableStream
+ * @param maxTokens 诊断模式需要更多 token（默认600，诊断用800）
  */
 async function buildStream(
   systemPrompt: string,
   history: ChatMessage[],
-  newMessage: string
+  newMessage: string,
+  maxTokens = 600
 ): Promise<ReadableStream<Uint8Array>> {
   const recentHistory = history.slice(-10);
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -318,7 +398,7 @@ async function buildStream(
       model: MODEL,
       messages,
       stream: true,
-      max_tokens: 600,
+      max_tokens: maxTokens,
       temperature: 0.8,
     });
 

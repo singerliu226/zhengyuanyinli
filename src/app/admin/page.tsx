@@ -3,14 +3,16 @@
 import { useState, useEffect } from "react";
 
 /**
- * 后台管理页 v2.2
+ * 后台管理页 v2.3
  *
- * Tab 结构重构：
+ * Tab 结构：
+ *  - 生成激活码：批量生成 + 导出 TXT
  *  - 概览：数据统计
- *  - 生成激活码：批量生成 + 导出 TXT（一行一码，直接上传到发货平台）
  *  - 激活码列表：查看历史批次 + 封禁
- *  - 自动发货：API 接口说明（供 码小秘/发货宝 等 webhook 使用）
+ *  - 自动发货：API 接口说明
  *  - 充值：手动补充灵犀
+ *    ├── 方式一：通过手机号查找（主推，适合扫码收款场景）
+ *    └── 方式二：通过 Result ID 直接充值
  */
 
 type Stats = {
@@ -39,7 +41,26 @@ type CardKey = {
   createdAt: string;
 };
 
+/** 手机号查找返回的用户信息 */
+type PhoneUser = {
+  keyCode: string;
+  planType: string;
+  keyStatus: string;
+  activatedAt: string | null;
+  resultId: string;
+  personalityType: string;
+  cityMatch: string;
+  lingxi: number;
+  resultCreatedAt: string;
+};
+
 type Tab = "stats" | "generate" | "keys" | "deliver" | "recharge";
+
+/** 充值方式：通过手机号 | 通过 Result ID */
+type RechargeMode = "phone" | "resultId";
+
+/** 可选充值次数（覆盖初始值3/8，以及各充值套餐2/15/50） */
+const RECHARGE_AMOUNTS = [1, 2, 3, 5, 8, 10, 15, 50];
 
 export default function AdminPage() {
   const [secret, setSecret] = useState("");
@@ -58,9 +79,19 @@ export default function AdminPage() {
   const [generating, setGenerating] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
 
-  // 充值表单
+  // 充值 - 通用
+  const [rechargeMode, setRechargeMode] = useState<RechargeMode>("phone");
+  const [rechargeAmount, setRechargeAmount] = useState(3);
+
+  // 充值 - 通过手机号
+  const [rechargePhone, setRechargePhone] = useState("");
+  const [phoneSearching, setPhoneSearching] = useState(false);
+  const [phoneUsers, setPhoneUsers] = useState<PhoneUser[] | null>(null);
+  const [selectedUser, setSelectedUser] = useState<PhoneUser | null>(null);
+  const [recharging, setRecharging] = useState(false);
+
+  // 充值 - 通过 Result ID
   const [rechargeResultId, setRechargeResultId] = useState("");
-  const [rechargeAmount, setRechargeAmount] = useState(10);
 
   function getHeaders() {
     return { "Content-Type": "application/json", Authorization: `Bearer ${secret}` };
@@ -136,19 +167,76 @@ export default function AdminPage() {
     setActiveTab("keys");
   }
 
-  // ── 充值 ──────────────────────────────────────────────────────────────
-  async function recharge() {
-    if (!rechargeResultId.trim()) { showMsg("请输入 Result ID", "error"); return; }
-    const res = await fetch("/api/admin", {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({ action: "recharge", resultId: rechargeResultId.trim(), amount: rechargeAmount }),
-    });
-    const data = await res.json();
-    showMsg(
-      data.success ? `✅ ${data.message}（当前灵犀：${data.newBalance} 次）` : `❌ ${data.error}`,
-      data.success ? "success" : "error"
-    );
+  // ── 通过手机号查找用户 ────────────────────────────────────────────────
+  async function searchByPhone() {
+    if (!rechargePhone.trim() || rechargePhone.trim().length < 7) {
+      showMsg("请输入有效手机号", "error");
+      return;
+    }
+    setPhoneSearching(true);
+    setPhoneUsers(null);
+    setSelectedUser(null);
+    try {
+      const res = await fetch(
+        `/api/admin?action=findByPhone&phone=${encodeURIComponent(rechargePhone.trim())}`,
+        { headers: { Authorization: `Bearer ${secret}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) { showMsg(`❌ ${data.error}`, "error"); return; }
+
+      if (!data.found) {
+        showMsg("未找到该手机号对应的用户，请确认手机号是否正确", "error");
+        setPhoneUsers([]);
+      } else {
+        setPhoneUsers(data.users);
+        if (data.users.length === 1) {
+          setSelectedUser(data.users[0]);
+          showMsg(`✅ 找到用户：${data.users[0].personalityType} · 当前灵犀 ${data.users[0].lingxi} 次`, "success");
+        } else {
+          showMsg(`找到 ${data.count} 条记录，请选择要充值的账户`, "info");
+        }
+      }
+    } catch {
+      showMsg("❌ 查找失败，请检查网络", "error");
+    } finally {
+      setPhoneSearching(false);
+    }
+  }
+
+  // ── 执行充值（支持两种来源：手机号选中的用户 / 直接输入 Result ID）──
+  async function doRecharge(resultId: string) {
+    if (!resultId || rechargeAmount < 1) {
+      showMsg("参数无效", "error");
+      return;
+    }
+    setRecharging(true);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "recharge", resultId, amount: rechargeAmount }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showMsg(`✅ ${data.message}（当前灵犀：${data.newBalance} 次）`, "success");
+        // 刷新手机号搜索结果中的余额（让管理员看到最新值）
+        if (selectedUser && selectedUser.resultId === resultId) {
+          setSelectedUser({ ...selectedUser, lingxi: data.newBalance });
+        }
+        if (phoneUsers) {
+          setPhoneUsers(phoneUsers.map((u) =>
+            u.resultId === resultId ? { ...u, lingxi: data.newBalance } : u
+          ));
+        }
+      } else {
+        showMsg(`❌ ${data.error}`, "error");
+      }
+    } catch {
+      showMsg("❌ 充值失败，请重试", "error");
+    } finally {
+      setRecharging(false);
+    }
   }
 
   // ── 导出工具 ──────────────────────────────────────────────────────────
@@ -374,7 +462,6 @@ export default function AdminPage() {
                   </h3>
                 </div>
 
-                {/* 操作按钮 */}
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button
                     onClick={() => copyAll(generatedCodes)}
@@ -395,7 +482,6 @@ export default function AdminPage() {
                   <strong>码小秘、发货宝</strong>等平台，客户付款后系统自动发码。
                 </div>
 
-                {/* 激活码预览 */}
                 <div className="bg-gray-50 rounded-xl p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-700 space-y-0.5">
                   {generatedCodes.map((code) => (
                     <div key={code} className="py-0.5 border-b border-gray-100 last:border-0">
@@ -427,7 +513,6 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* 历史批次 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <h3 className="font-bold text-gray-800 mb-3">历史批次</h3>
               {batches.length === 0 ? (
@@ -456,7 +541,6 @@ export default function AdminPage() {
         {/* ── Tab: 激活码列表 ──────────────────────────────────────────── */}
         {activeTab === "keys" && (
           <div className="space-y-3">
-            {/* 批次选择 */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-2">选择批次查看激活码：</p>
               <div className="flex flex-wrap gap-2">
@@ -529,7 +613,6 @@ export default function AdminPage() {
         {/* ── Tab: 自动发货 ────────────────────────────────────────────── */}
         {activeTab === "deliver" && (
           <div className="space-y-4">
-            {/* 方案A：预生成 + 平台上传 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg">📦</span>
@@ -549,12 +632,7 @@ export default function AdminPage() {
                       <div className="text-sm font-medium text-gray-800">{platform.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{platform.desc}</div>
                     </div>
-                    <a
-                      href={platform.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-rose-500 underline flex-shrink-0 mt-0.5"
-                    >
+                    <a href={platform.url} target="_blank" rel="noopener noreferrer" className="text-xs text-rose-500 underline flex-shrink-0 mt-0.5">
                       访问 →
                     </a>
                   </div>
@@ -562,7 +640,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* 方案B：API 自动生成 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg">🔗</span>
@@ -579,129 +656,227 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              <div className="bg-gray-900 rounded-xl p-4 mb-3">
-                <p className="text-xs text-green-400 font-mono mb-1">返回示例</p>
-                <pre className="text-xs text-gray-300 font-mono">{`{
-  "success": true,
-  "code": "ABCD1234EFGH5678",
-  "planType": "personal"
-}`}</pre>
-              </div>
-
               <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700">
                 ⚠️ planType 可选值：<code className="font-mono">personal</code>（个人版）·{" "}
                 <code className="font-mono">couple</code>（双人版）
               </div>
             </div>
 
-            {/* 发货话术模板 */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg">📝</span>
-                <h3 className="font-bold text-gray-800 text-sm">发货话术模板（可直接复制）</h3>
-              </div>
-              <p className="text-xs text-gray-400 mb-3">将 {`{激活码}`} 替换为实际生成的激活码，{`{域名}`} 替换为部署后的域名：</p>
-              <div className="space-y-3">
-                {[
-                  {
-                    label: "💫 个人探索版",
-                    template: `亲，感谢购买「正缘引力」！🎉
-
-激活码：{激活码}
-
-使用步骤：
-1. 打开链接：https://{域名}/activate
-2. 输入上方激活码 + 你的手机号
-3. 完成 25 道题（约3分钟）
-4. 即可解锁你的专属恋爱人格报告 ✨
-
-⏰ 报告有效期 72 小时，灵犀次数永久有效
-有问题随时联系我 💕`,
-                  },
-                  {
-                    label: "💕 双人同频版",
-                    template: `亲，感谢购买「正缘引力·双人同频版」！🎉
-
-激活码：{激活码}（发起人专用）
-
-使用步骤：
-1. 打开链接：https://{域名}/activate
-2. 输入激活码 + 手机号（你是发起人）
-3. 完成 25 道题，获得你的报告
-4. 报告页点击「邀请 TA 一起测试」
-5. 把邀请链接发给你的另一半
-6. 对方完成测试后，开启双人同频 AI 对话 💕
-
-TA 不需要单独购买或输入激活码，点击邀请链接即可测试。
-有问题随时联系我 💕`,
-                  },
-                ].map((t) => (
-                  <div key={t.label} className="border border-gray-100 rounded-xl overflow-hidden">
-                    <div className="bg-gray-50 px-3 py-2 flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-700">{t.label}</span>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(t.template); showMsg("✅ 话术已复制", "success"); }}
-                        className="text-xs text-rose-500 underline"
-                      >
-                        复制
-                      </button>
-                    </div>
-                    <pre className="px-3 py-3 text-xs text-gray-600 whitespace-pre-wrap leading-relaxed bg-white font-sans">
-                      {t.template}
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 推荐流程 */}
             <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-xs text-rose-700">
               💡 <strong>推荐流程</strong>：先用方案A上线销售，积累订单后再考虑接入方案B的API。
-              方案A足够满足日常自动发货需求。
             </div>
           </div>
         )}
 
         {/* ── Tab: 充值 ────────────────────────────────────────────────── */}
         {activeTab === "recharge" && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-2">手动补充灵犀</h3>
-            <p className="text-xs text-gray-400 mb-4 leading-relaxed">
-              用于处理用户充值后未自动到账的情况。ResultId 可从报告页 URL 中获取（URL 中的 token 前缀部分），或联系用户截图提供。
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 mb-1.5 block font-medium">用户 Result ID</label>
-                <input
-                  value={rechargeResultId}
-                  onChange={(e) => setRechargeResultId(e.target.value)}
-                  placeholder="从数据库或用户提供"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400"
-                />
+          <div className="space-y-4">
+
+            {/* 说明 */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-xs text-blue-700">
+              💡 <strong>使用场景</strong>：用户通过扫码支付后，在支付备注中留下手机号。
+              收到付款通知后，用手机号查找用户并补充灵犀次数。
+            </div>
+
+            {/* 充值方式切换 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-4">手动补充灵犀</h3>
+
+              {/* 方式切换 Tab */}
+              <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5">
+                {([
+                  { mode: "phone" as RechargeMode, label: "📱 通过手机号查找" },
+                  { mode: "resultId" as RechargeMode, label: "🔍 通过 Result ID" },
+                ] as { mode: RechargeMode; label: string }[]).map((item) => (
+                  <button
+                    key={item.mode}
+                    onClick={() => {
+                      setRechargeMode(item.mode);
+                      setMessage("");
+                      setPhoneUsers(null);
+                      setSelectedUser(null);
+                    }}
+                    className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${
+                      rechargeMode === item.mode
+                        ? "bg-white text-rose-500 shadow-sm"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1.5 block font-medium">
-                  补充灵犀次数：<strong className="text-gray-800">{rechargeAmount} 次</strong>
-                </label>
-                <div className="flex gap-2">
-                  {[5, 10, 15, 50].map((n) => (
+
+              {/* ── 方式一：通过手机号 ── */}
+              {rechargeMode === "phone" && (
+                <div className="space-y-4">
+                  {/* 手机号输入 + 查找 */}
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1.5 block font-medium">用户手机号（支付备注中的号码）</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={rechargePhone}
+                        onChange={(e) => setRechargePhone(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && searchByPhone()}
+                        placeholder="输入11位手机号"
+                        maxLength={11}
+                        className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400"
+                      />
+                      <button
+                        onClick={searchByPhone}
+                        disabled={phoneSearching}
+                        className="px-4 py-2.5 bg-rose-400 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex-shrink-0"
+                      >
+                        {phoneSearching ? "查找中..." : "查找"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 搜索结果：未找到 */}
+                  {phoneUsers !== null && phoneUsers.length === 0 && (
+                    <div className="bg-gray-50 rounded-xl p-4 text-center text-sm text-gray-400">
+                      未找到该手机号对应的用户
+                    </div>
+                  )}
+
+                  {/* 搜索结果：找到多个，让管理员选择 */}
+                  {phoneUsers !== null && phoneUsers.length > 1 && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-2">找到 {phoneUsers.length} 个账户，请选择要充值的：</p>
+                      <div className="space-y-2">
+                        {phoneUsers.map((user) => (
+                          <button
+                            key={user.resultId}
+                            onClick={() => setSelectedUser(user)}
+                            className={`w-full text-left p-3 rounded-xl border-2 transition-colors ${
+                              selectedUser?.resultId === user.resultId
+                                ? "border-rose-400 bg-rose-50"
+                                : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-sm font-medium text-gray-700">{planLabel[user.planType] ?? user.planType}</span>
+                                <span className="text-xs text-gray-400 ml-2">{user.personalityType}</span>
+                              </div>
+                              <span className="text-rose-500 font-bold text-sm">💓 {user.lingxi} 次</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              激活于 {user.activatedAt ? new Date(user.activatedAt).toLocaleDateString("zh-CN") : "-"}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 已选中的用户信息卡 */}
+                  {selectedUser && (
+                    <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-bold text-gray-800">已选中用户</span>
+                        <button
+                          onClick={() => { setSelectedUser(null); setPhoneUsers(null); setRechargePhone(""); }}
+                          className="text-xs text-gray-400 underline"
+                        >
+                          重新查找
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                        <div>版本：<strong>{planLabel[selectedUser.planType] ?? selectedUser.planType}</strong></div>
+                        <div>人格：<strong>{selectedUser.personalityType}</strong></div>
+                        <div>城市匹配：<strong>{selectedUser.cityMatch}</strong></div>
+                        <div>当前灵犀：<strong className="text-rose-500">💓 {selectedUser.lingxi} 次</strong></div>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-2 font-mono break-all">
+                        ID: {selectedUser.resultId}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 充值次数选择（找到用户后显示） */}
+                  {selectedUser && (
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1.5 block font-medium">
+                        补充灵犀次数：<strong className="text-gray-800">{rechargeAmount} 次</strong>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {RECHARGE_AMOUNTS.map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setRechargeAmount(n)}
+                            className={`px-3 py-2 rounded-xl text-sm border transition-colors ${
+                              rechargeAmount === n
+                                ? "border-rose-400 bg-rose-50 text-rose-500 font-medium"
+                                : "border-gray-200 text-gray-500"
+                            }`}
+                          >
+                            {n} 次
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUser && (
                     <button
-                      key={n}
-                      onClick={() => setRechargeAmount(n)}
-                      className={`flex-1 py-2 rounded-xl text-sm border transition-colors ${
-                        rechargeAmount === n
-                          ? "border-rose-400 bg-rose-50 text-rose-500"
-                          : "border-gray-200 text-gray-500"
-                      }`}
+                      onClick={() => doRecharge(selectedUser.resultId)}
+                      disabled={recharging}
+                      className="btn-primary w-full py-3 text-sm"
                     >
-                      {n} 次
+                      {recharging ? "充值中..." : `确认补充 ${rechargeAmount} 次灵犀`}
                     </button>
-                  ))}
+                  )}
                 </div>
-              </div>
-              <button onClick={recharge} className="btn-primary w-full py-3 text-sm">
-                确认补充灵犀
-              </button>
+              )}
+
+              {/* ── 方式二：通过 Result ID ── */}
+              {rechargeMode === "resultId" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Result ID 可从报告页 URL 的 token 前缀部分获取，或让用户截图提供。
+                  </p>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1.5 block font-medium">用户 Result ID</label>
+                    <input
+                      value={rechargeResultId}
+                      onChange={(e) => setRechargeResultId(e.target.value)}
+                      placeholder="从数据库或用户提供"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-rose-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1.5 block font-medium">
+                      补充灵犀次数：<strong className="text-gray-800">{rechargeAmount} 次</strong>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {RECHARGE_AMOUNTS.map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => setRechargeAmount(n)}
+                          className={`px-3 py-2 rounded-xl text-sm border transition-colors ${
+                            rechargeAmount === n
+                              ? "border-rose-400 bg-rose-50 text-rose-500 font-medium"
+                              : "border-gray-200 text-gray-500"
+                          }`}
+                        >
+                          {n} 次
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => doRecharge(rechargeResultId.trim())}
+                    disabled={recharging || !rechargeResultId.trim()}
+                    className="btn-primary w-full py-3 text-sm disabled:opacity-50"
+                  >
+                    {recharging ? "充值中..." : `确认补充 ${rechargeAmount} 次灵犀`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

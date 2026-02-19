@@ -20,6 +20,7 @@ import { verifyResultToken } from "@/lib/jwt";
 import {
   streamChat,
   streamCoupleChat,
+  streamDiagnosis,
   calculateLingxiCost,
   isNightMode,
   type ChatMessage,
@@ -30,7 +31,7 @@ import logger from "@/lib/logger";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { token, message, history = [], coupleMode = false, deepMode = false } = body;
+    const { token, message, history = [], coupleMode = false, deepMode = false, diagnosisMode = false } = body;
 
     if (!token || typeof token !== "string") {
       return NextResponse.json({ error: "缺少身份凭证" }, { status: 401 });
@@ -56,11 +57,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "测试结果不存在" }, { status: 404 });
     }
 
-    // 判断消耗档位（deepMode 强制2次；常规模式按关键词自动判断；深夜×1.5）
+    // 判断消耗档位：诊断模式强制5次；深度模式2次；常规模式按关键词判断上限1次
     const nightMode = isNightMode();
-    let lingxiCost = deepMode ? 2 : calculateLingxiCost(message.trim(), nightMode);
-    // 常规模式上限1次（防止关键词误判升为2次）
-    if (!deepMode) lingxiCost = Math.min(lingxiCost, 1);
+    let lingxiCost: number;
+    if (diagnosisMode) {
+      lingxiCost = 5;
+    } else if (deepMode) {
+      lingxiCost = 2;
+    } else {
+      lingxiCost = Math.min(calculateLingxiCost(message.trim(), nightMode), 1);
+    }
 
     // 灵犀不足：返回结构化信息，前端渲染充能引导
     if (result.lingxi < lingxiCost) {
@@ -114,7 +120,25 @@ export async function POST(req: NextRequest) {
     // 构建流式 AI 响应
     let aiStream: ReadableStream<Uint8Array>;
 
-    if (coupleMode && result.partnerId) {
+    // 关系诊断模式：使用专用提示，给出全面的诊断报告
+    if (diagnosisMode) {
+      const partnerResult = result.partnerId
+        ? await prisma.result.findUnique({
+            where: { id: result.partnerId },
+            select: { personalityType: true, cityMatch: true, scores: true },
+          })
+        : null;
+
+      const partnerCtx = partnerResult
+        ? {
+            personalityType: partnerResult.personalityType,
+            cityMatch: partnerResult.cityMatch,
+            scores: partnerResult.scores as UserContext["scores"],
+          }
+        : undefined;
+
+      aiStream = await streamDiagnosis(selfContext, message.trim(), partnerCtx, nightMode);
+    } else if (coupleMode && result.partnerId) {
       // ── 双人同频模式 ──────────────────────────────────────────────
       // 1. 加载伴侣档案
       const partnerResult = await prisma.result.findUnique({

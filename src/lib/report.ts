@@ -49,8 +49,10 @@ export type ReportData = {
       matchPersonalityId: string;
       matchPersonalityName: string;
       content: string;
-      /** 与本人格最契合的 MBTI 类型列表 */
+      /** 与本人格最契合的 MBTI 类型列表（测试者自身视角） */
       mbtiCompatible: { types: string[]; note: string };
+      /** 匹配人格自身代表的 MBTI 类型（帮助测试者在现实中识别匹配对象） */
+      matchTypicalMbti: string[];
     };
     chatInvite: string;
   };
@@ -106,6 +108,7 @@ export function generateReport(scoringResult: ScoringResult): ReportData {
         matchPersonalityName: bestMatch?.name ?? "待定",
         content: personality.report.compatibility,
         mbtiCompatible: personality.mbtiCompatible,
+        matchTypicalMbti: bestMatch?.typicalMbti ?? [],
       },
       chatInvite: personality.report.chatInvite,
     },

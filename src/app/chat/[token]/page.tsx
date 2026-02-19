@@ -41,6 +41,11 @@ export default function ChatPage() {
   const [insufficientInfo, setInsufficientInfo] = useState<InsufficientInfo | null>(null);
   const [isNight, setIsNight] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
+  const [diagnosisMode, setDiagnosisMode] = useState(false);
+  const [showDiagnosisForm, setShowDiagnosisForm] = useState(false);
+  const [diagDuration, setDiagDuration] = useState("");
+  const [diagIssue, setDiagIssue] = useState("");
+  const [diagDesc, setDiagDesc] = useState("");
   const [partnerHasCompleted, setPartnerHasCompleted] = useState(false);
   const [partnerPersonalityType, setPartnerPersonalityType] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -92,8 +97,33 @@ export default function ChatPage() {
     }
   }
 
+  /** 提交关系诊断表单，构造诊断请求消息 */
+  function handleDiagnosisSubmit() {
+    if (!diagDuration || !diagIssue || !diagDesc.trim()) return;
+    const msg = `【关系诊断请求】
+在一起时长：${diagDuration}
+主要困扰：${diagIssue}
+当前状态：${diagDesc.trim()}
+
+请基于我的人格测试数据${partnerHasCompleted ? "和对方的报告" : ""}，对这段关系做一次完整的诊断：分析问题的根源，指出关键矛盾点，给出一个最核心的改善方向。`;
+
+    setDiagnosisMode(true);
+    setShowDiagnosisForm(false);
+    setInput(msg);
+    // 延迟一帧让 input 更新后再触发发送
+    setTimeout(() => {
+      handleSendWithMessage(msg, true);
+    }, 50);
+  }
+
   async function handleSend() {
     const msg = input.trim();
+    if (!msg || isStreaming) return;
+    await handleSendWithMessage(msg, diagnosisMode);
+    setDiagnosisMode(false);
+  }
+
+  async function handleSendWithMessage(msg: string, isDiagnosis: boolean) {
     if (!msg || isStreaming) return;
 
     setInput("");
@@ -112,7 +142,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, message: msg, history, coupleMode, deepMode }),
+        body: JSON.stringify({ token, message: msg, history, coupleMode, deepMode: isDiagnosis ? false : deepMode, diagnosisMode: isDiagnosis }),
       });
 
       if (!res.ok) {
@@ -345,6 +375,113 @@ export default function ChatPage() {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 关系诊断入口 */}
+      {!showDiagnosisForm && (
+        <div className="px-4 pb-2">
+          <button
+            onClick={() => setShowDiagnosisForm(true)}
+            className={`w-full text-left rounded-2xl px-4 py-3 text-xs border transition-all ${
+              isNight
+                ? "bg-gray-800 border-gray-600 text-gray-300"
+                : "bg-white border-rose-100 text-gray-600 hover:border-rose-200"
+            }`}
+          >
+            <span className="font-medium text-rose-500">🔍 关系诊断</span>
+            <span className={`ml-2 ${isNight ? "text-gray-500" : "text-gray-400"}`}>
+              · 5次灵犀 · 描述你们的情况，缘缘给出全面分析
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* 关系诊断表单 */}
+      {showDiagnosisForm && (
+        <div className={`mx-4 mb-3 rounded-2xl p-4 border ${
+          isNight ? "bg-gray-800 border-gray-600" : "bg-white border-rose-100 shadow-sm"
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={`text-sm font-semibold ${isNight ? "text-gray-200" : "text-gray-700"}`}>
+              🔍 关系诊断
+            </span>
+            <button
+              onClick={() => setShowDiagnosisForm(false)}
+              className={`text-xs ${isNight ? "text-gray-500" : "text-gray-400"}`}
+            >
+              收起
+            </button>
+          </div>
+
+          {/* Q1: 时长 */}
+          <div className="mb-3">
+            <p className={`text-xs mb-1.5 ${isNight ? "text-gray-400" : "text-gray-500"}`}>在一起多久了？</p>
+            <div className="flex flex-wrap gap-1.5">
+              {["不到1个月", "1-6个月", "6个月-1年", "1-3年", "3年以上"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDiagDuration(d)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                    diagDuration === d
+                      ? "bg-rose-400 text-white border-rose-400"
+                      : isNight ? "bg-gray-700 text-gray-400 border-gray-600" : "bg-gray-50 text-gray-500 border-gray-200"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Q2: 主要困扰 */}
+          <div className="mb-3">
+            <p className={`text-xs mb-1.5 ${isNight ? "text-gray-400" : "text-gray-500"}`}>最让你困扰的是？</p>
+            <div className="flex flex-wrap gap-1.5">
+              {["沟通不顺", "冷战/冷漠", "信任危机", "情感距离感", "价值观分歧", "控制与自由"].map((issue) => (
+                <button
+                  key={issue}
+                  onClick={() => setDiagIssue(issue)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
+                    diagIssue === issue
+                      ? "bg-rose-400 text-white border-rose-400"
+                      : isNight ? "bg-gray-700 text-gray-400 border-gray-600" : "bg-gray-50 text-gray-500 border-gray-200"
+                  }`}
+                >
+                  {issue}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Q3: 自由描述 */}
+          <div className="mb-3">
+            <p className={`text-xs mb-1.5 ${isNight ? "text-gray-400" : "text-gray-500"}`}>用一两句话描述现在的状态</p>
+            <textarea
+              value={diagDesc}
+              onChange={(e) => setDiagDesc(e.target.value)}
+              placeholder="比如：我们最近总为同一件事反复争，我说完他沉默，感觉话说不进去..."
+              rows={2}
+              maxLength={200}
+              className={`w-full resize-none rounded-xl px-3 py-2 text-xs focus:outline-none border ${
+                isNight
+                  ? "bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500"
+                  : "border-gray-200 text-gray-700 placeholder-gray-400"
+              }`}
+            />
+          </div>
+
+          <button
+            onClick={handleDiagnosisSubmit}
+            disabled={!diagDuration || !diagIssue || !diagDesc.trim() || isStreaming}
+            className={`w-full py-2.5 rounded-xl text-sm font-medium transition-all ${
+              diagDuration && diagIssue && diagDesc.trim()
+                ? "bg-rose-400 text-white"
+                : isNight ? "bg-gray-700 text-gray-500" : "bg-gray-100 text-gray-400"
+            }`}
+          >
+            提交诊断（消耗 5 次灵犀）
+          </button>
         </div>
       )}
 
