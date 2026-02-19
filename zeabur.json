@@ -3,7 +3,7 @@
     "command": "npx prisma generate && npm run build"
   },
   "start": {
-    "command": "npm run start"
+    "command": "prisma db push && next start"
   },
   "environment": {
     "NODE_ENV": "production"
