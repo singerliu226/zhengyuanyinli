@@ -94,16 +94,19 @@ export default function ActivatePage() {
         return;
       }
 
-      // 已完成过测试的回头客 → 直接跳到已有报告
+      // 已完成过测试的回头客 → 把 token 存到 localStorage，直接跳到已有报告
       if (data.alreadyCompleted && data.resultToken) {
+        localStorage.setItem("lcm_token", data.resultToken);
         router.push(`/result/${data.resultToken}`);
         return;
       }
 
-      // 存入 sessionStorage 供答题页使用
+      // 存入 sessionStorage + localStorage 供答题页使用
+      // localStorage 存 cardKeyId 是为了浏览器关闭后仍可通过手机号找回未完成的测试
       sessionStorage.setItem("cardKeyId", data.cardKeyId);
       sessionStorage.setItem("planType", data.planType ?? "personal");
       sessionStorage.setItem("activatedPhone", phone.slice(0, 3) + "****" + phone.slice(-4));
+      localStorage.setItem("lcm_pending_phone", phone);
 
       // 显示版本引导弹层，而非直接跳转
       setActivatedPlan(data.planType ?? "personal");

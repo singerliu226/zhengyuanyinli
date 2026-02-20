@@ -246,7 +246,14 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    logger.error("Chat 接口异常", { error: (err as Error).message });
+    const errMsg = (err as Error).message ?? "";
+    logger.error("Chat 接口异常", { error: errMsg });
+
+    // 把内层抛出的具体错误透传给前端，而不是统一掩盖为"服务器异常"
+    // 这样用户能看到"AI服务暂时不可用"还是"数据库异常"，便于排查
+    if (errMsg.includes("AI 服务暂时不可用")) {
+      return NextResponse.json({ error: errMsg }, { status: 503 });
+    }
     return NextResponse.json({ error: "服务器异常，请稍后重试" }, { status: 500 });
   }
 }

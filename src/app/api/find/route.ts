@@ -54,23 +54,34 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 整理返回数据：只暴露必要字段
-    const reports = cardKeys
-      .filter((k) => k.result) // 只返回已完成测试的
-      .map((k) => ({
-        token: k.result!.token,
-        personalityType: k.result!.personalityType,
-        cityMatch: k.result!.cityMatch,
-        lingxiLeft: k.result!.lingxi,
-        planType: k.planType,
-        isExpired: k.result!.expiresAt ? new Date(k.result!.expiresAt) < new Date() : false,
-        hasPartner: !!k.result!.partnerId,
-        createdAt: k.result!.createdAt,
-      }));
+    // 区分"已完成"和"已激活但未完成答题"两种情况
+    const completedKeys = cardKeys.filter((k) => k.result);
+    const pendingKeys   = cardKeys.filter((k) => !k.result && k.status === "activated");
+
+    // 若有已完成的报告，直接返回
+    const reports = completedKeys.map((k) => ({
+      token: k.result!.token,
+      personalityType: k.result!.personalityType,
+      cityMatch: k.result!.cityMatch,
+      lingxiLeft: k.result!.lingxi,
+      planType: k.planType,
+      isExpired: k.result!.expiresAt ? new Date(k.result!.expiresAt) < new Date() : false,
+      hasPartner: !!k.result!.partnerId,
+      createdAt: k.result!.createdAt,
+    }));
 
     if (reports.length === 0) {
+      // 有未完成的测试：用户中途退出了，引导其重新输入激活码继续答题
+      // hasPending=true 时前端会给出"继续完成测试"而非"去激活"的提示
+      const hasPending = pendingKeys.length > 0;
       return NextResponse.json(
-        { success: false, error: "你的激活码尚未完成测试，请继续激活完成答题" },
+        {
+          success: false,
+          hasPending,
+          error: hasPending
+            ? "你有一个尚未提交的测试，重新输入激活码即可继续"
+            : "该手机号暂无已完成的测试记录",
+        },
         { status: 404 }
       );
     }

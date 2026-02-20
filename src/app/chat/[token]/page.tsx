@@ -139,7 +139,9 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     try {
-      const history = newMessages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
+      // history 只传当前消息之前的对话记录；当前用户消息通过 message 字段单独发送，
+      // 避免 API 层在 history + message 中重复出现同一条用户消息
+      const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -158,6 +160,11 @@ export default function ChatPage() {
             message: data.message,
           });
           return;
+        }
+
+        // 503 = Qwen API 暂时不可用，给用户更友好的提示
+        if (res.status === 503) {
+          throw new Error("AI 服务暂时繁忙，请稍等1分钟再试～");
         }
 
         throw new Error(data.error || "请求失败");

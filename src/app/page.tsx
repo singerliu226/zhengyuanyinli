@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -436,6 +436,176 @@ function PaymentModal({ plan, onClose, onPaid }: PaymentModalProps) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 浮动缘缘按钮（右下角常驻，三态自适应）
+//
+// 三种场景：
+//   1. localStorage 有 token → "继续和缘缘聊" → 直跳 /chat/[token]
+//   2. 有 token 但过期/无效 → 降级为场景3
+//   3. 无缓存 → "找到缘缘" → 弹出手机号输入 modal
+//      modal 内支持：手机号找回（call /api/find）+ 跳到激活页
+// ─────────────────────────────────────────────────────────────
+function YuanyuanFAB() {
+  const router = useRouter();
+  /**
+   * token 三态：
+   *   undefined  = 还在读 localStorage，不渲染（避免 SSR 闪烁）
+   *   ""         = 无缓存，显示"找到缘缘"按钮
+   *   string     = 有 token，显示"继续聊"按钮
+   */
+  const [token, setToken]           = useState<string | undefined>(undefined);
+  const [showModal, setShowModal]   = useState(false);
+  const [phone, setPhone]           = useState("");
+  const [finding, setFinding]       = useState(false);
+  const [findError, setFindError]   = useState("");
+
+  // 仅在客户端读取 localStorage，避免 Next.js SSR 报错
+  useEffect(() => {
+    const stored = localStorage.getItem("lcm_token");
+    setToken(stored ?? "");
+  }, []);
+
+  /** 通过手机号找回报告，成功后写 localStorage 并跳转到对话页 */
+  const handlePhoneFind = useCallback(async () => {
+    if (!/^1[3-9]\d{9}$/.test(phone)) {
+      setFindError("请输入正确的11位手机号");
+      return;
+    }
+    setFinding(true);
+    setFindError("");
+    try {
+      const res  = await fetch(`/api/find?phone=${encodeURIComponent(phone)}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        // hasPending：激活了但未完成答题 → 引导去激活页继续
+        if (data.hasPending) {
+          setShowModal(false);
+          router.push("/activate");
+          return;
+        }
+        setFindError(data.error || "未找到记录");
+        return;
+      }
+
+      // 优先取最新、未过期的报告
+      const valid = (data.reports as Array<{ token: string; isExpired: boolean }>)
+        .find((r) => !r.isExpired) ?? data.reports[0];
+
+      if (valid) {
+        localStorage.setItem("lcm_token", valid.token);
+        setToken(valid.token);
+        setShowModal(false);
+        router.push(`/chat/${valid.token}`);
+      }
+    } catch {
+      setFindError("网络异常，请稍后重试");
+    } finally {
+      setFinding(false);
+    }
+  }, [phone, router]);
+
+  // 还在读 localStorage，不渲染任何东西（避免 hydration 闪烁）
+  if (token === undefined) return null;
+
+  // ── 有 token：显示"继续聊"按钮 ──────────────────────────────
+  if (token) {
+    return (
+      <button
+        onClick={() => router.push(`/chat/${token}`)}
+        className="fixed bottom-6 right-5 z-40 flex items-center gap-2 bg-gradient-to-r from-rose-400 to-pink-500 text-white rounded-full pl-3 pr-5 py-3 shadow-lg shadow-rose-200 active:scale-95 transition-transform"
+        aria-label="继续和缘缘聊"
+      >
+        <span className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-sm flex-shrink-0">
+          💬
+        </span>
+        <span className="text-sm font-semibold">继续和缘缘聊</span>
+      </button>
+    );
+  }
+
+  // ── 无 token：显示"找到缘缘"+ 弹层 ──────────────────────────
+  return (
+    <>
+      <button
+        onClick={() => setShowModal(true)}
+        className="fixed bottom-6 right-5 z-40 flex items-center gap-2 bg-white border-2 border-rose-200 text-rose-500 rounded-full pl-3 pr-5 py-3 shadow-lg active:scale-95 transition-transform"
+        aria-label="找到缘缘"
+      >
+        <span className="w-7 h-7 bg-rose-50 rounded-full flex items-center justify-center text-sm flex-shrink-0">
+          💕
+        </span>
+        <span className="text-sm font-semibold">找到缘缘</span>
+      </button>
+
+      {/* 手机号验证弹层 */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-end justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowModal(false); setFindError(""); } }}
+        >
+          <div className="bg-white rounded-t-3xl w-full max-w-sm px-5 pt-4 pb-10 shadow-2xl">
+            {/* 拖拽条 */}
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+
+            {/* 标题 */}
+            <div className="text-center mb-5">
+              <div className="text-4xl mb-2">💕</div>
+              <h3 className="text-base font-bold text-gray-800">回到你的缘缘</h3>
+              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                输入当时绑定的手机号<br />即可直接进入对话和报告
+              </p>
+            </div>
+
+            {/* 手机号输入 */}
+            <input
+              type="tel"
+              maxLength={11}
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value.replace(/\D/g, "").slice(0, 11));
+                setFindError("");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handlePhoneFind()}
+              placeholder="输入绑定时的手机号"
+              className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-base text-center focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 mb-2"
+            />
+            {findError && (
+              <p className="text-rose-500 text-xs text-center mb-2">{findError}</p>
+            )}
+
+            {/* 找回按钮 */}
+            <button
+              onClick={handlePhoneFind}
+              disabled={finding || phone.length < 11}
+              className="btn-primary w-full py-3.5 text-sm font-semibold mb-4 disabled:opacity-50"
+            >
+              {finding ? "查找中..." : "找回缘缘 →"}
+            </button>
+
+            {/* 次级操作 */}
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() => { setShowModal(false); router.push("/activate"); }}
+                className="text-xs text-gray-400 underline"
+              >
+                我有新激活码
+              </button>
+              <span className="text-gray-200">|</span>
+              <button
+                onClick={() => { setShowModal(false); router.push("/find"); }}
+                className="text-xs text-gray-400 underline"
+              >
+                查看全部报告
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // 主页面
 // ─────────────────────────────────────────────────────────────
 export default function HomePage() {
@@ -714,6 +884,9 @@ export default function HomePage() {
       <footer className="text-center text-gray-300 text-xs pb-8">
         <p>© 2026 正缘引力 · 仅供娱乐参考，不构成专业心理建议</p>
       </footer>
+
+      {/* 浮动缘缘入口：根据 localStorage 自动识别是否老用户 */}
+      <YuanyuanFAB />
 
     </main>
   );

@@ -76,8 +76,9 @@ export default function TestPage() {
         return;
       }
 
-      // 清除 sessionStorage，跳转到报告页
+      // 清除 sessionStorage，把 token 持久化到 localStorage 供首页浮动按钮读取
       sessionStorage.removeItem("cardKeyId");
+      localStorage.setItem("lcm_token", data.token);
       router.push(`/result/${data.token}`);
     } catch {
       setError("网络异常，请重试");
