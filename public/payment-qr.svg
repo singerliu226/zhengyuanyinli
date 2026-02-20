@@ -1,22 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="280" viewBox="0 0 240 280">
-  <!-- �o -->
+  <!-- 背景 -->
   <rect width="240" height="280" fill="#fff5f5" rx="16" stroke="#fecaca" stroke-width="2"/>
 
-  <!-- �
-ҚMW -->
+  <!-- 左上角定位块 -->
   <rect x="24" y="24" width="56" height="56" rx="6" fill="none" stroke="#f87171" stroke-width="4"/>
   <rect x="36" y="36" width="32" height="32" rx="3" fill="#f87171"/>
 
-  <!-- �
-ҚMW -->
+  <!-- 右上角定位块 -->
   <rect x="160" y="24" width="56" height="56" rx="6" fill="none" stroke="#f87171" stroke-width="4"/>
   <rect x="172" y="36" width="32" height="32" rx="3" fill="#f87171"/>
 
-  <!-- �ҚMW -->
+  <!-- 左下角定位块 -->
   <rect x="24" y="160" width="56" height="56" rx="6" fill="none" stroke="#f87171" stroke-width="4"/>
   <rect x="36" y="172" width="32" height="32" rx="3" fill="#f87171"/>
 
-  <!-- -�pn!W!ߌ�� W	 -->
+  <!-- 中间数据模块（模拟二维码像素块） -->
   <rect x="100" y="24" width="10" height="10" rx="2" fill="#fca5a5"/>
   <rect x="116" y="24" width="10" height="10" rx="2" fill="#f87171"/>
   <rect x="132" y="24" width="10" height="10" rx="2" fill="#fca5a5"/>
@@ -52,8 +50,8 @@
   <rect x="148" y="192" width="10" height="10" rx="2" fill="#f87171"/>
   <rect x="192" y="192" width="10" height="10" rx="2" fill="#fca5a5"/>
 
-  <!-- `M�W -->
-  <text x="120" y="238" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="13" font-weight="600" fill="#ef4444">��b:��6></text>
-  <text x="120" y="258" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="11" fill="#f87171">�GX: public/payment-qr.png</text>
-  <text x="120" y="274" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="10" fill="#fca5a5">Mn NEXT_PUBLIC_PAYMENT_QR_URL</text>
+  <!-- 占位文字 -->
+  <text x="120" y="238" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="13" font-weight="600" fill="#ef4444">请替换为您的收款码</text>
+  <text x="120" y="258" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="11" fill="#f87171">将图片存为 public/payment-qr.png</text>
+  <text x="120" y="274" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="10" fill="#fca5a5">或配置 NEXT_PUBLIC_PAYMENT_QR_URL</text>
 </svg>
