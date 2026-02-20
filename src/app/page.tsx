@@ -481,7 +481,7 @@ export default function HomePage() {
             return (
               <button
                 key={plan.id}
-                onClick={() => setSelectedPlan(plan.id)}
+                onClick={() => { setSelectedPlan(plan.id); setShowBuyGuide(true); }}
                 className={`w-full text-left rounded-3xl p-5 transition-all duration-200 border-2 ${
                   isSelected
                     ? "bg-white border-rose-400 shadow-lg shadow-rose-100"

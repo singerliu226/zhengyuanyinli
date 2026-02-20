@@ -53,6 +53,61 @@ const PAY_CHANNELS = [
   { id: "alipay", label: "支付宝",   icon: "💙", src: "/alipay.png", activeClass: "border-blue-400 bg-blue-50 text-blue-600"  },
 ] as const;
 
+/** 客服微信号（与 CustomerService 组件保持一致） */
+const WECHAT_ID = "musinic";
+
+/**
+ * 备选渠道提示卡片 —— 扫码不成功或未到账时的兜底引导
+ * 扫码区和等待区均复用此组件，避免重复代码
+ */
+function FallbackGuide() {
+  const [copied, setCopied] = useState(false);
+
+  function copyWechat() {
+    navigator.clipboard.writeText(WECHAT_ID).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="border border-dashed border-gray-200 rounded-2xl px-4 py-3 space-y-2">
+      <p className="text-xs font-medium text-gray-500 text-center">扫码不成功或迟迟未到账？试试以下方式</p>
+
+      {/* 客服微信 */}
+      <div className="flex items-center justify-between bg-green-50 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="text-base">💬</span>
+          <div>
+            <p className="text-xs text-gray-500">联系客服微信</p>
+            <p className="text-sm font-bold text-gray-800 tracking-wider">{WECHAT_ID}</p>
+          </div>
+        </div>
+        <button
+          onClick={copyWechat}
+          className="text-xs px-2.5 py-1 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+        >
+          {copied ? "✅ 已复制" : "复制"}
+        </button>
+      </div>
+
+      {/* 闲鱼 / 小红书 */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-orange-50 rounded-xl px-3 py-2 text-center">
+          <p className="text-sm mb-0.5">🐟</p>
+          <p className="text-xs font-medium text-orange-600">闲鱼</p>
+          <p className="text-xs text-gray-400 mt-0.5 leading-tight">搜索「正缘引力」</p>
+        </div>
+        <div className="bg-red-50 rounded-xl px-3 py-2 text-center">
+          <p className="text-sm mb-0.5">📕</p>
+          <p className="text-xs font-medium text-red-600">小红书</p>
+          <p className="text-xs text-gray-400 mt-0.5 leading-tight">搜索「正缘引力」</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 下载二维码图片 */
 async function downloadQR(channel: "wechat" | "alipay") {
   const src = channel === "wechat" ? "/wechat.jpg" : "/alipay.png";
@@ -390,6 +445,11 @@ export default function RechargePage() {
             当前余额：💓 {lingxiLeft} 次
           </p>
         )}
+
+        {/* 长时间未到账的兜底引导 */}
+        <div className="pt-1">
+          <FallbackGuide />
+        </div>
       </div>
     );
   };
@@ -616,6 +676,9 @@ export default function RechargePage() {
                     >
                       {submitting ? "提交中..." : "我已完成扫码支付 →"}
                     </button>
+
+                    {/* ⑥ 扫码不成功时的备选引导 */}
+                    <FallbackGuide />
                   </div>
                 )}
 
