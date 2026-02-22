@@ -601,7 +601,12 @@ export default function ChatPage() {
       </div>
 
       {/* 客服入口：发过消息后实时出现，或之前有过历史对话/充值 */}
-      <CustomerService token={token} extraVisible={hasSentMessage} />
+      {/* bottom-32 避免遮挡底部输入框（输入框约 64px + 安全区） */}
+      <CustomerService
+        token={token}
+        extraVisible={hasSentMessage}
+        buttonClassName="fixed bottom-32 left-4 z-40 flex items-center gap-1.5 bg-white border border-gray-200 shadow-md rounded-full px-3 py-2 text-xs text-gray-500 hover:shadow-lg transition-shadow"
+      />
     </main>
   );
 }

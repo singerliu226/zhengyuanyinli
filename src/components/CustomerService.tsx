@@ -20,9 +20,14 @@ type Props = {
   token?: string;
   /** 强制可见（父组件在特定操作后置为 true，如发送第一条消息）*/
   extraVisible?: boolean;
+  /**
+   * 浮动按钮的定位 class，默认 "fixed bottom-6 left-4 z-40"
+   * 在有底部输入框的页面（如聊天页）传入更高的 bottom 值避免遮挡
+   */
+  buttonClassName?: string;
 };
 
-export default function CustomerService({ token, extraVisible = false }: Props) {
+export default function CustomerService({ token, extraVisible = false, buttonClassName }: Props) {
   const [visible, setVisible] = useState(false);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -61,7 +66,7 @@ export default function CustomerService({ token, extraVisible = false }: Props) 
       {/* 浮动按钮 */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-6 left-4 z-40 flex items-center gap-1.5 bg-white border border-gray-200 shadow-md rounded-full px-3 py-2 text-xs text-gray-500 hover:shadow-lg transition-shadow"
+        className={buttonClassName ?? "fixed bottom-6 left-4 z-40 flex items-center gap-1.5 bg-white border border-gray-200 shadow-md rounded-full px-3 py-2 text-xs text-gray-500 hover:shadow-lg transition-shadow"}
         aria-label="联系客服"
       >
         <span className="text-sm">💬</span>

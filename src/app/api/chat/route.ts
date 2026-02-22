@@ -29,6 +29,11 @@ import {
 import logger from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
+  // 用于 catch 块退还灵犀：仅在预扣成功后设为 true
+  let lingxiDeducted = false;
+  let deductedResultId = "";
+  let deductedCost = 0;
+
   try {
     const body = await req.json();
     const { token, message, history = [], coupleMode = false, deepMode = false, diagnosisMode = false } = body;
@@ -90,6 +95,11 @@ export async function POST(req: NextRequest) {
     if (updated.count === 0) {
       return NextResponse.json({ error: "lingxi_insufficient", lingxiLeft: result.lingxi, lingxiCost }, { status: 402 });
     }
+
+    // 标记预扣成功，后续 AI 调用失败时在 catch 块退还
+    lingxiDeducted = true;
+    deductedResultId = result.id;
+    deductedCost = lingxiCost;
 
     // 记录用户消息
     await prisma.chat.create({
@@ -249,8 +259,20 @@ export async function POST(req: NextRequest) {
     const errMsg = (err as Error).message ?? "";
     logger.error("Chat 接口异常", { error: errMsg });
 
+    // AI 调用失败时退还已预扣的灵犀，避免用户白白扣费
+    if (lingxiDeducted && deductedResultId) {
+      try {
+        await prisma.result.update({
+          where: { id: deductedResultId },
+          data: { lingxi: { increment: deductedCost } },
+        });
+        logger.info("AI 调用失败，灵犀已退回", { resultId: deductedResultId, deductedCost });
+      } catch (refundErr) {
+        logger.error("灵犀退回失败", { resultId: deductedResultId, error: (refundErr as Error).message });
+      }
+    }
+
     // 把内层抛出的具体错误透传给前端，而不是统一掩盖为"服务器异常"
-    // 这样用户能看到"AI服务暂时不可用"还是"数据库异常"，便于排查
     if (errMsg.includes("AI 服务暂时不可用")) {
       return NextResponse.json({ error: errMsg }, { status: 503 });
     }
