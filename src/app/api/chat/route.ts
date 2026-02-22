@@ -29,6 +29,15 @@ import {
 import logger from "@/lib/logger";
 
 export async function POST(req: NextRequest) {
+  // 最前置检测：环境变量未配置时立即返回，避免后续流程出现误导性错误
+  if (!process.env.QWEN_API_KEY) {
+    logger.error("QWEN_API_KEY 未配置，拒绝 chat 请求");
+    return NextResponse.json(
+      { error: "AI 服务未配置，请联系管理员（缺少 QWEN_API_KEY 环境变量）" },
+      { status: 503 }
+    );
+  }
+
   // 用于 catch 块退还灵犀：仅在预扣成功后设为 true
   let lingxiDeducted = false;
   let deductedResultId = "";

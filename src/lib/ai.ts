@@ -16,12 +16,25 @@ import { getPersonalityById } from "@/data/personalities";
 
 const log = createModuleLogger("ai");
 
-const qwenClient = new OpenAI({
-  apiKey: process.env.QWEN_API_KEY ?? "",
-  baseURL: process.env.QWEN_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1",
-});
-
+// ── 启动时检查关键环境变量，缺失时在日志中明确输出，方便 Zeabur 控制台快速定位 ──
+const QWEN_API_KEY = process.env.QWEN_API_KEY ?? "";
+const QWEN_BASE_URL = process.env.QWEN_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const MODEL = process.env.QWEN_MODEL ?? "qwen-plus";
+
+if (!QWEN_API_KEY) {
+  log.error("【启动检测】QWEN_API_KEY 未配置！AI 服务将无法正常工作。请在 Zeabur Variables 中设置 QWEN_API_KEY。");
+} else {
+  log.info("【启动检测】QWEN_API_KEY 已配置", {
+    keyPrefix: QWEN_API_KEY.substring(0, 8) + "...",
+    baseURL: QWEN_BASE_URL,
+    model: MODEL,
+  });
+}
+
+const qwenClient = new OpenAI({
+  apiKey: QWEN_API_KEY,
+  baseURL: QWEN_BASE_URL,
+});
 
 // ── 灵犀消耗规则关键词 ──────────────────────────────────────────
 /** 浅度对话关键词：消耗 1 次灵犀 */
@@ -429,15 +442,45 @@ async function buildStream(
     });
   } catch (err) {
     const msg = (err as Error).message ?? "";
-    // 将 Qwen 的真实错误打印出来，便于在 Zeabur 日志里直接看到根因
-    log.error("Qwen API 调用失败", { error: msg, model: MODEL, baseURL: process.env.QWEN_BASE_URL });
-    // 常见原因透出给前端，帮助快速定位
-    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("Invalid API-key")) {
-      throw new Error("AI 服务暂时不可用：API Key 无效或未配置，请检查 QWEN_API_KEY 环境变量");
+    const status = (err as { status?: number }).status;
+
+    // 将 Qwen 的真实错误完整打印，便于在 Zeabur 日志里直接看到根因
+    log.error("Qwen API 调用失败", {
+      error: msg,
+      status,
+      model: MODEL,
+      baseURL: QWEN_BASE_URL,
+      apiKeyConfigured: !!QWEN_API_KEY,
+    });
+
+    // 未配置 Key：快速失败
+    if (!QWEN_API_KEY) {
+      throw new Error("AI 服务不可用：QWEN_API_KEY 未配置，请在 Zeabur Variables 中添加该环境变量");
     }
-    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) {
-      throw new Error("AI 服务暂时不可用：请求频率超限或额度不足，请稍后重试");
+    // 401 / 认证失败
+    if (
+      status === 401 ||
+      msg.includes("401") ||
+      msg.includes("Unauthorized") ||
+      msg.includes("Invalid API-key") ||
+      msg.includes("Authentication")
+    ) {
+      throw new Error("AI 服务不可用：API Key 无效或已过期，请检查 QWEN_API_KEY");
     }
-    throw new Error("AI 服务暂时不可用，请稍后重试");
+    // 429 / 频率/额度超限
+    if (
+      status === 429 ||
+      msg.includes("429") ||
+      msg.includes("rate limit") ||
+      msg.includes("quota") ||
+      msg.includes("Throttling")
+    ) {
+      throw new Error("AI 服务暂时繁忙：请求频率超限或额度不足，请稍后重试");
+    }
+    // 503 / 上游服务不可用
+    if (status === 503 || msg.includes("503") || msg.includes("Service Unavailable")) {
+      throw new Error("AI 服务暂时不可用，请稍后重试");
+    }
+    throw new Error(`AI 服务异常，请稍后重试（${msg.slice(0, 80)}）`);
   }
 }
