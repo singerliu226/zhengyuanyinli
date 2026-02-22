@@ -18,14 +18,79 @@ type InsufficientInfo = {
 };
 
 /**
- * AI 情感追问页 v2.1
+ * AI 情感追问页 v2.2
  * 变更：
  * - 情感币 → 灵犀次数，更新消耗展示
  * - 发送前显示预计消耗次数
  * - 深夜模式（23:00-06:00）：深色背景 + 温柔提示
  * - 灵犀不足：显示充能引导卡片（非简单文字报错）
  * - 双人同频模式（URL参数 coupleMode=true）：顶部标识 + 特殊提示
+ * - 预设快速提问按 personalityType 动态渲染（8种人格各4题）
+ * - 移除气泡内"消耗 X 次灵犀"，灵犀余额仅在 header 静默更新
  */
+
+/**
+ * 8种恋爱人格的专属快速提问
+ * 根据用户 personalityType 动态渲染，让第一眼就觉得"这说的是我"
+ */
+const QUICK_QUESTIONS: Record<string, string[]> = {
+  "都市燃料型": [
+    "为什么我恋爱总感觉有点累？",
+    "我这种节奏，适合什么类型的伴侣？",
+    "我会不会因为太独立让对方觉得不被需要？",
+    "我在感情里什么时候最容易不安？",
+  ],
+  "精致理智型": [
+    "我是不是在感情里太理性，反而让对方觉得冷？",
+    "我的完美主义在感情里是优势还是障碍？",
+    "什么样的人能真正让我心动？",
+    "我是不是很难接受不符合预期的伴侣？",
+  ],
+  "烟火温柔型": [
+    "我感情里容易过度付出吗？",
+    "我这种性格最容易被什么样的人吸引？",
+    "我在感情里最需要的安全感是什么样的？",
+    "我怎么判断一段感情值不值得继续？",
+  ],
+  "文艺孤独型": [
+    "我为什么感情里总有点距离感？",
+    "我是不是很难找到真正懂我的人？",
+    "我的理想关系是什么样的？",
+    "我适合主动迈出第一步吗？",
+  ],
+  "自由探索型": [
+    "我是不是骨子里有点害怕稳定的关系？",
+    "我的自由感和感情稳定感能共存吗？",
+    "什么样的伴侣不会让我觉得窒息？",
+    "我怎么知道自己是真的爱一个人？",
+  ],
+  "稳定守护型": [
+    "我的稳定是对方的安心，还是对方眼里的沉闷？",
+    "我感情里是不是付出多、表达少？",
+    "我怎么判断对方是否真的珍惜我？",
+    "我容易找到和我频率一致的人吗？",
+  ],
+  "社交蝴蝶型": [
+    "我太受欢迎了，会不会让对方没有安全感？",
+    "我是不是有点依赖对方给我的关注和回应？",
+    "什么样的感情模式最适合我？",
+    "我怎么区分喜欢一个人和喜欢被喜欢？",
+  ],
+  "内核超强型": [
+    "我自我很强，感情里容易出现什么问题？",
+    "我是不是对伴侣有很高的精神层面要求？",
+    "我能放下自我、真正融入一段关系吗？",
+    "什么样的人才能真正进入我的世界？",
+  ],
+};
+
+/** 兜底预设问题（人格未知时使用） */
+const DEFAULT_QUICK_QUESTIONS = [
+  "我感情里容易出现什么问题？",
+  "我适合什么类型的伴侣？",
+  "我的理想关系是什么样的？",
+  "我在感情里最需要什么？",
+];
 export default function ChatPage() {
   const { token } = useParams<{ token: string }>();
   const searchParams = useSearchParams();
@@ -295,11 +360,6 @@ export default function ChatPage() {
               }`}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
-              {msg.lingxiCost !== undefined && msg.lingxiCost > 0 && msg.role === "assistant" && (
-                <p className={`text-xs mt-2 ${isNight ? "text-gray-500" : "text-gray-400"}`}>
-                  消耗 {msg.lingxiCost} 次灵犀
-                </p>
-              )}
             </div>
           </div>
         ))}
@@ -341,17 +401,12 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 快速提问（首次对话显示） */}
+      {/* 快速提问（首次对话显示，按人格类型动态渲染） */}
       {messages.length === 1 && !coupleMode && (
         <div className="px-4 pb-2">
           <p className={`text-xs mb-2 text-center ${isNight ? "text-gray-500" : "text-gray-400"}`}>快速提问 ↓</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {[
-              "我和稳定守护型合适吗？",
-              "我感情里容易出现什么问题？",
-              "我的理想型在哪里能遇到？",
-              "我的依恋风格是什么？",
-            ].map((q) => (
+            {(QUICK_QUESTIONS[personalityType] ?? DEFAULT_QUICK_QUESTIONS).map((q) => (
               <button
                 key={q}
                 onClick={() => setInput(q)}
