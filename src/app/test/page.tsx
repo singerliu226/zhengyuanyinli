@@ -93,7 +93,7 @@ export default function TestPage() {
         <div className="text-center">
           <div className="text-5xl mb-6 animate-pulse">🔮</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">正在分析你的恋爱人格...</h2>
-          <p className="text-gray-500 text-sm">基于你的25道题答案，匹配最适合你的城市</p>
+          <p className="text-gray-500 text-sm">基于你的答案，分析你的正缘</p>
           <div className="mt-6 h-1.5 w-48 bg-gray-200 rounded-full overflow-hidden mx-auto">
             <div className="h-full bg-gradient-to-r from-rose-400 to-pink-400 rounded-full animate-pulse" style={{ width: "70%" }} />
           </div>

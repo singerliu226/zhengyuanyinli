@@ -428,7 +428,16 @@ async function buildStream(
       },
     });
   } catch (err) {
-    log.error("Qwen API 调用失败", { error: (err as Error).message });
+    const msg = (err as Error).message ?? "";
+    // 将 Qwen 的真实错误打印出来，便于在 Zeabur 日志里直接看到根因
+    log.error("Qwen API 调用失败", { error: msg, model: MODEL, baseURL: process.env.QWEN_BASE_URL });
+    // 常见原因透出给前端，帮助快速定位
+    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("Invalid API-key")) {
+      throw new Error("AI 服务暂时不可用：API Key 无效或未配置，请检查 QWEN_API_KEY 环境变量");
+    }
+    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) {
+      throw new Error("AI 服务暂时不可用：请求频率超限或额度不足，请稍后重试");
+    }
     throw new Error("AI 服务暂时不可用，请稍后重试");
   }
 }
