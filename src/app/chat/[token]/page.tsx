@@ -227,9 +227,9 @@ export default function ChatPage() {
           return;
         }
 
-        // 503 = Qwen API 暂时不可用，给用户更友好的提示
+        // 503 = AI 服务问题，使用服务端返回的具体信息（便于诊断）
         if (res.status === 503) {
-          throw new Error("AI 服务暂时繁忙，请稍等1分钟再试～");
+          throw new Error(data.error || "AI 服务暂时繁忙，请稍等1分钟再试～");
         }
 
         throw new Error(data.error || "请求失败");

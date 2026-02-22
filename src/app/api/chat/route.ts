@@ -110,6 +110,15 @@ export async function POST(req: NextRequest) {
     deductedResultId = result.id;
     deductedCost = lingxiCost;
 
+    logger.info("[STEP] 灵犀预扣成功，准备调用 AI", {
+      resultId: result.id,
+      lingxiCost,
+      coupleMode,
+      deepMode,
+      diagnosisMode,
+      messageLen: message.trim().length,
+    });
+
     // 记录用户消息
     await prisma.chat.create({
       data: {
@@ -156,6 +165,7 @@ export async function POST(req: NextRequest) {
           }
         : undefined;
 
+      logger.info("[STEP] 进入诊断模式，调用 streamDiagnosis");
       aiStream = await streamDiagnosis(selfContext, message.trim(), partnerCtx, nightMode);
     } else if (coupleMode && result.partnerId) {
       // ── 双人同频模式 ──────────────────────────────────────────────
@@ -213,17 +223,21 @@ export async function POST(req: NextRequest) {
           cityMatch: partnerResult.cityMatch,
           scores: partnerScores,
         };
+        logger.info("[STEP] 进入双人模式，调用 streamCoupleChat");
         aiStream = await streamCoupleChat(
           selfContext, partnerContext, history as ChatMessage[],
           message.trim(), nightMode, partnerChatSummary
         );
       } else {
+        logger.info("[STEP] 双人模式但无伴侣档案，降级为单人 streamChat");
         aiStream = await streamChat(selfContext, history as ChatMessage[], message.trim(), nightMode);
       }
     } else {
+      logger.info("[STEP] 进入单人模式，调用 streamChat");
       aiStream = await streamChat(selfContext, history as ChatMessage[], message.trim(), nightMode);
     }
 
+    logger.info("[STEP] AI 流已创建，开始管道传输");
     // TransformStream 在流结束后将 AI 回复存库
     let fullResponse = "";
     const encoder = new TextEncoder();
@@ -266,7 +280,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     const errMsg = (err as Error).message ?? "";
-    logger.error("Chat 接口异常", { error: errMsg });
+    const errStack = (err as Error).stack ?? "";
+    logger.error("Chat 接口异常", {
+      error: errMsg,
+      // 前200字符的堆栈，精确定位哪行代码抛出的
+      stack: errStack.slice(0, 200),
+      lingxiDeducted,
+    });
 
     // AI 调用失败时退还已预扣的灵犀，避免用户白白扣费
     if (lingxiDeducted && deductedResultId) {
