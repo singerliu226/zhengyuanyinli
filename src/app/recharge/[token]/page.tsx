@@ -19,7 +19,7 @@ const PACKAGES = [
     id: "single",
     emoji: "⚡",
     name: "单次急救",
-    lingxi: 2,
+    lingxi: 5,
     price: "5.9",
     original: "9.9",
     desc: "临时起意的两个疑问",

@@ -21,7 +21,7 @@ export const LINGXI_PACKAGES = [
   {
     id: "single",
     name: "单次急救",
-    lingxi: 1,
+    lingxi: 5,
     price: 590,        // 单位：分（¥5.90）
     displayPrice: "5.9",
     originalPrice: "9.9",
