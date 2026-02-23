@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // isCouplePartner=true 时前端跳转到伴侣测试页面
     // alreadyCompleted=true 时前端直接跳转到已有报告
     return NextResponse.json({
       success: true,
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest) {
       planType: result.planType,
       resultToken: result.resultToken ?? null,
       alreadyCompleted: result.alreadyCompleted ?? false,
+      coupleToken: result.coupleToken ?? null,
+      isCouplePartner: result.isCouplePartner ?? false,
     });
   } catch (err) {
     logger.error("激活接口异常", { error: (err as Error).message });

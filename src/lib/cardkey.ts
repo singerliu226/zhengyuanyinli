@@ -257,8 +257,53 @@ export function generateDeviceFingerprint(ip: string, userAgent: string): string
 }
 
 export type ActivateResult =
-  | { success: true; cardKeyId: string; planType: string; resultToken?: string; alreadyCompleted?: boolean }
+  | { success: true; cardKeyId: string; planType: string; resultToken?: string; alreadyCompleted?: boolean; coupleToken?: string; isCouplePartner?: boolean }
   | { success: false; error: string; canRetrieve?: boolean };
+
+/**
+ * 双人版/礼盒版：第二人用同一激活码激活时的处理逻辑
+ *
+ * 检查发起人是否已完成测试并生成 coupleToken：
+ * - 有 coupleToken 且尚未被使用 → 返回 coupleToken，前端引导进入伴侣测试流程
+ * - 有 coupleToken 但已有伴侣 → 提示名额已满
+ * - 无 coupleToken（理论上不会出现，因为 used 状态一定有 result）→ 提示异常
+ */
+async function handleCouplePartnerActivation(
+  cardKey: { id: string; planType: string; result: { token: string } | null },
+  normalizedCode: string,
+  normalizedPhone: string
+): Promise<ActivateResult> {
+  // 查询发起人的 Result，获取 coupleToken 和 partnerId
+  const primaryResult = await prisma.result.findFirst({
+    where: { cardKeyId: cardKey.id },
+    select: { id: true, coupleToken: true, partnerId: true },
+  });
+
+  if (!primaryResult || !primaryResult.coupleToken) {
+    log.warn("双人版激活码已使用但未找到 coupleToken", { code: normalizedCode });
+    return { success: false, error: "激活码状态异常，请联系客服" };
+  }
+
+  // 检查是否已有伴侣加入（双向绑定后 partnerId 不为空）
+  if (primaryResult.partnerId) {
+    log.warn("双人版两个名额已满", { code: normalizedCode });
+    return { success: false, error: "该双人版激活码的两个名额已全部使用" };
+  }
+
+  log.info("双人版伴侣通过同一激活码进入", {
+    code: normalizedCode,
+    phone: normalizedPhone.slice(0, 3) + "****",
+    coupleToken: primaryResult.coupleToken,
+  });
+
+  return {
+    success: true,
+    cardKeyId: cardKey.id,
+    planType: cardKey.planType,
+    coupleToken: primaryResult.coupleToken,
+    isCouplePartner: true,
+  };
+}
 
 /**
  * 激活一张卡密
@@ -314,6 +359,9 @@ export async function activateCardKey(
         resultToken: resultToken ?? undefined,
         alreadyCompleted: true,
       };
+    } else if (cardKey.planType === "couple" || cardKey.planType === "gift") {
+      // 双人版/礼盒版：第二人用同一激活码 → 引导到伴侣测试流程
+      return await handleCouplePartnerActivation(cardKey, normalizedCode, normalizedPhone);
     } else {
       log.warn("尝试用不同手机号复用激活码", { code: normalizedCode });
       return { success: false, error: "该激活码已被其他手机号使用，每码仅限一人" };
@@ -325,6 +373,13 @@ export async function activateCardKey(
     if (cardKey.phone === normalizedPhone) {
       log.info("同手机号重新进入，允许继续答题", { code: normalizedCode });
       return { success: true, cardKeyId: cardKey.id, planType: cardKey.planType };
+    } else if (cardKey.planType === "couple" || cardKey.planType === "gift") {
+      // 双人版：发起人尚未完成测试，伴侣需等待
+      log.info("双人版伴侣尝试激活，但发起人尚未完成测试", { code: normalizedCode });
+      return {
+        success: false,
+        error: "你的伴侣还没完成测试，请等 TA 完成后再试。双人版需要发起人先做完测试，你再用同一个激活码参与。",
+      };
     } else {
       log.warn("激活码已被其他手机号激活", { code: normalizedCode });
       return { success: false, error: "该激活码已被其他用户使用，每码仅限一人" };

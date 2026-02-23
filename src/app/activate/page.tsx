@@ -94,6 +94,12 @@ export default function ActivatePage() {
         return;
       }
 
+      // 双人版伴侣：同一激活码第二人 → 自动跳转到伴侣测试页面
+      if (data.isCouplePartner && data.coupleToken) {
+        router.push(`/couple/${data.coupleToken}`);
+        return;
+      }
+
       // 已完成过测试的回头客 → 把 token 存到 localStorage，直接跳到已有报告
       if (data.alreadyCompleted && data.resultToken) {
         localStorage.setItem("lcm_token", data.resultToken);
@@ -163,7 +169,7 @@ export default function ActivatePage() {
           <h1 className="text-2xl font-bold text-gray-800 mb-2">输入激活码</h1>
           <p className="text-gray-500 text-sm leading-relaxed">
             在订单消息中找到激活码<br />
-            每个激活码仅限一人使用
+            个人版限一人使用，双人版两人共用同一码
           </p>
         </div>
 
