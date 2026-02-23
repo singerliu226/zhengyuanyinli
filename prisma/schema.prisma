@@ -1,7 +1,6 @@
 // ============================================
-// 正缘引力 - 数据库模型定义 v2.1
-// 变更：emotionCoins→lingxi, coinsCost→lingxiCost
-// 新增：planType, coupleToken, partnerId, expiresAt, PaymentOrder
+// 正缘引力 - 数据库模型定义 v2.2
+// 变更：新增 RechargeCode / RechargeBatch（充值码体系）
 // ============================================
 
 generator client {
@@ -170,4 +169,56 @@ model CardBatch {
   planType  String    @default("personal")
   cards     CardKey[]
   createdAt DateTime  @default(now())
+}
+
+/**
+ * 充值码表 - 用于灵犀充值的一次性兑换码
+ *
+ * 适用场景：在小红书/闲鱼等外部平台销售灵犀充值包时，
+ * 通过阿奇索等自动发货工具将充值码发送给买家，
+ * 买家在报告页/聊天页自助输入充值码即可完成灵犀充值。
+ *
+ * 格式：LX-XXXX-XXXX（前缀 LX 区分于激活码，8位有效字符）
+ * 状态机：unused（未使用）→ used（已兑换）
+ */
+model RechargeCode {
+  id          String    @id @default(cuid())
+  /// 充值码本体，格式：LX-XXXX-XXXX
+  code        String    @unique
+  /// 兑换后充入的灵犀次数
+  lingxiCount Int
+  /// 套餐显示名称，如 "灵犀标准包"
+  packageName String
+  /// 状态：unused | used
+  status      String    @default("unused")
+  /// 兑换时关联的 Result ID
+  resultId    String?
+  /// 所属批次 ID
+  batchId     String?
+  batch       RechargeBatch? @relation(fields: [batchId], references: [id])
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([code])
+  @@index([status])
+  @@index([batchId])
+}
+
+/**
+ * 充值码批次表 - 追踪每次批量生成的充值码
+ */
+model RechargeBatch {
+  id          String         @id @default(cuid())
+  /// 批次备注名，如 "2026-02-小红书-灵犀标准包-50张"
+  name        String
+  /// 批次内生成的充值码数量
+  count       Int
+  /// 套餐 ID，如 "standard"
+  packageId   String
+  /// 套餐显示名称
+  packageName String
+  /// 每张充值码的灵犀次数
+  lingxiCount Int
+  codes       RechargeCode[]
+  createdAt   DateTime       @default(now())
 }

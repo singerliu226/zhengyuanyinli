@@ -156,6 +156,16 @@ export default function RechargePage() {
   const [phoneError, setPhoneError] = useState("");
   /** 正在提交收款记录 */
   const [submitting, setSubmitting] = useState(false);
+  /** 充值码输入 */
+  const [rechargeCode, setRechargeCode] = useState("");
+  const [rechargeCodeOpen, setRechargeCodeOpen] = useState(false);
+  const [rechargeCodeLoading, setRechargeCodeLoading] = useState(false);
+  const [rechargeCodeResult, setRechargeCodeResult] = useState<{
+    success: boolean;
+    message: string;
+    lingxiCount?: number;
+    newBalance?: number;
+  } | null>(null);
 
   const isDev = process.env.NODE_ENV === "development" ||
     (typeof window !== "undefined" && window.location.hostname === "localhost");
@@ -218,6 +228,44 @@ export default function RechargePage() {
         setPollResult("timeout");
       }
     }, 2000);
+  }
+
+  // ─── 充值码兑换 ─────────────────────────────────────────────────────────
+  async function handleRedeemCode() {
+    const code = rechargeCode.trim();
+    if (!code) return;
+
+    setRechargeCodeLoading(true);
+    setRechargeCodeResult(null);
+
+    try {
+      const res = await fetch("/api/recharge/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, code }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setLingxiLeft(data.newBalance);
+        setRechargeCodeResult({
+          success: true,
+          message: `${data.packageName} 兑换成功！+${data.lingxiCount} 次灵犀`,
+          lingxiCount: data.lingxiCount,
+          newBalance: data.newBalance,
+        });
+        setRechargeCode("");
+      } else {
+        setRechargeCodeResult({
+          success: false,
+          message: data.error ?? "兑换失败",
+        });
+      }
+    } catch {
+      setRechargeCodeResult({ success: false, message: "网络异常，请稍后重试" });
+    } finally {
+      setRechargeCodeLoading(false);
+    }
   }
 
   // ─── 虎皮椒支付（审核通过后使用）───────────────────────────────────────
@@ -468,6 +516,67 @@ export default function RechargePage() {
           <div className="max-w-sm mx-auto bg-white rounded-2xl px-5 py-3 flex items-center justify-between shadow-sm">
             <span className="text-sm text-gray-500">当前灵犀余额</span>
             <span className="text-rose-500 font-bold text-lg">💓 {lingxiLeft} 次</span>
+          </div>
+        </div>
+      )}
+
+      {/* 充值码兑换入口 */}
+      {!polling && pollResult !== "success" && !qrPaid && (
+        <div className="px-6 mb-4">
+          <div className="max-w-sm mx-auto">
+            {!rechargeCodeOpen ? (
+              <button
+                onClick={() => setRechargeCodeOpen(true)}
+                className="w-full text-center text-xs text-rose-400 py-2 hover:text-rose-500 transition-colors"
+              >
+                🎫 有充值码？点击兑换
+              </button>
+            ) : (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-rose-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-gray-800">🎫 充值码兑换</p>
+                  <button
+                    onClick={() => { setRechargeCodeOpen(false); setRechargeCodeResult(null); }}
+                    className="text-xs text-gray-400 hover:text-gray-500"
+                  >
+                    收起
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={rechargeCode}
+                    onChange={(e) => setRechargeCode(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === "Enter" && handleRedeemCode()}
+                    placeholder="输入充值码 如 LX-XXXX-XXXX"
+                    className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-rose-400 transition-colors"
+                  />
+                  <button
+                    onClick={handleRedeemCode}
+                    disabled={rechargeCodeLoading || !rechargeCode.trim()}
+                    className="px-4 py-2.5 bg-rose-400 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex-shrink-0 hover:bg-rose-500 transition-colors"
+                  >
+                    {rechargeCodeLoading ? "..." : "兑换"}
+                  </button>
+                </div>
+                {rechargeCodeResult && (
+                  <div className={`rounded-xl px-3 py-2.5 text-xs ${
+                    rechargeCodeResult.success
+                      ? "bg-green-50 text-green-700 border border-green-100"
+                      : "bg-red-50 text-red-600 border border-red-100"
+                  }`}>
+                    {rechargeCodeResult.success ? "🎉 " : ""}{rechargeCodeResult.message}
+                    {rechargeCodeResult.success && rechargeCodeResult.newBalance !== undefined && (
+                      <span className="block mt-1 font-medium">
+                        当前灵犀余额：💓 {rechargeCodeResult.newBalance} 次
+                      </span>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-gray-400">
+                  充值码可在小红书/闲鱼购买，格式为 LX-开头
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

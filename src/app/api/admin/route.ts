@@ -1,8 +1,8 @@
 export const dynamic = "force-dynamic";
 
 /**
- * /api/admin - 后台管理接口 v2.2
- * 变更：新增 findByPhone 接口，支持通过手机号查找用户后充值灵犀
+ * /api/admin - 后台管理接口 v2.3
+ * 变更：新增小红书订单管理相关接口
  *
  * 所有请求需要通过 Authorization: Bearer {ADMIN_SECRET} 认证
  *
@@ -10,17 +10,24 @@ export const dynamic = "force-dynamic";
  * GET  /api/admin?action=keys&batch=id              - 某批次激活码列表
  * GET  /api/admin?action=results                    - 近50条用户结果
  * GET  /api/admin?action=payments                   - 近50条支付订单
- * GET  /api/admin?action=findByPhone&phone=1xx      - 通过手机号查找用户（返回匹配的所有Result）
+ * GET  /api/admin?action=findByPhone&phone=1xx      - 通过手机号查找用户
  * GET  /api/admin?action=manualPayments&status=pending  - 手动收款记录列表
+ * GET  /api/admin?action=xhsOrders&status=all       - 小红书订单列表
+ * GET  /api/admin?action=xhsStats                   - 小红书订单统计
+ * GET  /api/admin?action=xhsAuthUrl                 - 获取小红书授权 URL
+ * GET  /api/admin?action=xhsAuthStatus              - 检查小红书授权状态
  * POST { action: 'generate', count, batchName, planType }  - 批量生成激活码
- * POST { action: 'recharge', resultId, amount }            - 手动充值灵犀（by Result ID）
- * POST { action: 'confirmManual', id, op }                 - 确认收款记录（op: recharge|done）
+ * POST { action: 'recharge', resultId, amount }            - 手动充值灵犀
+ * POST { action: 'confirmManual', id, op }                 - 确认收款记录
  * POST { action: 'ban', code }                             - 封禁激活码
+ * POST { action: 'generateRechargeCodes', count, batchName, packageId }  - 批量生成充值码
+ * GET  /api/admin?action=rechargeCodes&status=all     - 充值码列表
+ * GET  /api/admin?action=rechargeBatches              - 充值码批次列表
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateCardKeyBatch } from "@/lib/cardkey";
+import { generateCardKeyBatch, generateRechargeCodeBatch, RECHARGE_PACKAGES } from "@/lib/cardkey";
 import logger from "@/lib/logger";
 
 function isAuthorized(req: NextRequest): boolean {
@@ -185,6 +192,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ records });
     }
 
+    /** 充值码批次列表 */
+    if (action === "rechargeBatches") {
+      const batches = await prisma.rechargeBatch.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+
+      return NextResponse.json({ batches, packages: RECHARGE_PACKAGES });
+    }
+
+    /** 充值码列表（支持按批次和状态筛选） */
+    if (action === "rechargeCodes") {
+      const batchId = searchParams.get("batch");
+      const status = searchParams.get("status") ?? "all";
+
+      const where: Record<string, unknown> = {};
+      if (batchId) where.batchId = batchId;
+      if (status !== "all") where.status = status;
+
+      const codes = await prisma.rechargeCode.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+          id: true,
+          code: true,
+          lingxiCount: true,
+          packageName: true,
+          status: true,
+          resultId: true,
+          usedAt: true,
+          createdAt: true,
+        },
+      });
+
+      return NextResponse.json({ codes });
+    }
+
     return NextResponse.json({ error: "未知操作" }, { status: 400 });
   } catch (err) {
     logger.error("Admin GET 接口异常", { error: (err as Error).message });
@@ -325,6 +370,32 @@ export async function POST(req: NextRequest) {
 
       logger.warn("激活码已封禁", { code });
       return NextResponse.json({ success: true, message: "激活码已封禁" });
+    }
+
+    /** 批量生成充值码 */
+    if (action === "generateRechargeCodes") {
+      const { count, batchName, packageId } = body;
+
+      if (!count || count < 1 || count > 1000) {
+        return NextResponse.json({ error: "数量须在1-1000之间" }, { status: 400 });
+      }
+      if (!batchName || typeof batchName !== "string") {
+        return NextResponse.json({ error: "请输入批次名称" }, { status: 400 });
+      }
+      if (!["single", "standard", "deep"].includes(packageId)) {
+        return NextResponse.json({ error: "无效的套餐类型" }, { status: 400 });
+      }
+
+      const codes = await generateRechargeCodeBatch(count, batchName.trim(), packageId);
+      const pkg = RECHARGE_PACKAGES.find((p) => p.id === packageId);
+
+      logger.info("后台批量生成充值码", { count: codes.length, batchName, packageId });
+
+      return NextResponse.json({
+        success: true,
+        codes,
+        message: `成功生成 ${codes.length} 张 [${pkg?.name ?? packageId}] 充值码（每张 ${pkg?.lingxi} 次灵犀）`,
+      });
     }
 
     return NextResponse.json({ error: "未知操作" }, { status: 400 });

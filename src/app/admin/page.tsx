@@ -54,10 +54,29 @@ type PhoneUser = {
   resultCreatedAt: string;
 };
 
-type Tab = "stats" | "generate" | "keys" | "deliver" | "recharge" | "pending";
+type Tab = "stats" | "generate" | "keys" | "deliver" | "recharge" | "pending" | "rechargeCodes";
 
 /** 充值方式：通过手机号 | 通过 Result ID */
 type RechargeMode = "phone" | "resultId";
+
+/** 充值码批次 */
+type RechargeBatchType = {
+  id: string;
+  name: string;
+  count: number;
+  packageId: string;
+  packageName: string;
+  lingxiCount: number;
+  createdAt: string;
+};
+
+/** 充值码套餐 */
+type RechargePackageType = {
+  id: string;
+  name: string;
+  lingxi: number;
+  price: string;
+};
 
 /** 手动收款记录 */
 type ManualRecord = {
@@ -114,6 +133,16 @@ export default function AdminPage() {
 
   // 充值 - 通过 Result ID
   const [rechargeResultId, setRechargeResultId] = useState("");
+
+  // 充值码管理
+  const [rcBatches, setRcBatches] = useState<RechargeBatchType[]>([]);
+  const [rcPackages, setRcPackages] = useState<RechargePackageType[]>([]);
+  const [rcGenCount, setRcGenCount] = useState(50);
+  const [rcGenBatchName, setRcGenBatchName] = useState("");
+  const [rcGenPackageId, setRcGenPackageId] = useState("standard");
+  const [rcGenerating, setRcGenerating] = useState(false);
+  const [rcGeneratedCodes, setRcGeneratedCodes] = useState<string[]>([]);
+  const [rcLoading, setRcLoading] = useState(false);
 
   function getHeaders() {
     return { "Content-Type": "application/json", Authorization: `Bearer ${secret}` };
@@ -208,6 +237,15 @@ export default function AdminPage() {
       if (!silent) setManualLoading(false);
     }
   }
+
+  // ── 进入「充值码」Tab 时加载批次数据 ──────────────────────────────
+  useEffect(() => {
+    if (!authed) return;
+    if (activeTab === "rechargeCodes") {
+      loadRcBatches();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, authed]);
 
   // ── 在「待确认」Tab 时启动 15s 轮询，离开时清除 ───────────────────────
   useEffect(() => {
@@ -359,6 +397,69 @@ export default function AdminPage() {
     a.click();
   }
 
+  // ── 充值码管理 ──────────────────────────────────────────────────────
+  async function loadRcBatches() {
+    setRcLoading(true);
+    try {
+      const res = await fetch("/api/admin?action=rechargeBatches", {
+        headers: { Authorization: `Bearer ${secret}` },
+      });
+      const data = await res.json();
+      setRcBatches(data.batches ?? []);
+      setRcPackages(data.packages ?? []);
+    } catch {
+      showMsg("加载充值码批次失败", "error");
+    } finally {
+      setRcLoading(false);
+    }
+  }
+
+  async function generateRechargeCodes() {
+    if (rcGenerating) return;
+    if (!rcGenBatchName.trim()) {
+      showMsg("请输入批次名称", "error");
+      return;
+    }
+    setRcGenerating(true);
+    setRcGeneratedCodes([]);
+
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          action: "generateRechargeCodes",
+          count: rcGenCount,
+          batchName: rcGenBatchName.trim(),
+          packageId: rcGenPackageId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRcGeneratedCodes(data.codes);
+        showMsg(data.message, "success");
+        loadRcBatches();
+      } else {
+        showMsg(data.error ?? "生成失败", "error");
+      }
+    } catch {
+      showMsg("请求失败", "error");
+    } finally {
+      setRcGenerating(false);
+    }
+  }
+
+  function downloadRcCodes(codes: string[], batchName: string) {
+    const text = codes.join("\n");
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `充值码-${batchName}-${codes.length}张.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const statusColor: Record<string, string> = {
     unused: "text-gray-400",
     activated: "text-blue-500",
@@ -409,12 +510,13 @@ export default function AdminPage() {
   }
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: "pending",  label: "💳 待确认" },
-    { id: "generate", label: "🎫 生成激活码" },
-    { id: "stats",    label: "📊 概览" },
-    { id: "keys",     label: "🔑 激活码列表" },
-    { id: "deliver",  label: "🚀 自动发货" },
-    { id: "recharge", label: "💰 充值" },
+    { id: "pending",       label: "💳 待确认" },
+    { id: "rechargeCodes", label: "🎫 充值码" },
+    { id: "generate",      label: "🔑 生成激活码" },
+    { id: "stats",         label: "📊 概览" },
+    { id: "keys",          label: "📋 激活码列表" },
+    { id: "deliver",       label: "🚀 自动发货" },
+    { id: "recharge",      label: "💰 手动充值" },
   ];
 
   return (
@@ -609,6 +711,142 @@ export default function AdminPage() {
               💡 用户填写手机号并点击「我已完成支付」后，记录自动出现在这里。
               核对收款通知后，点击「一键充值」或「已发送激活码」即可完成处理。
               页面每 15 秒自动刷新。
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: 充值码管理 ──────────────────────────────────────────── */}
+        {activeTab === "rechargeCodes" && (
+          <div className="space-y-3">
+
+            {/* 生成充值码表单 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <h3 className="font-bold text-gray-800 mb-4">批量生成充值码</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block font-medium">批次名称</label>
+                  <input
+                    value={rcGenBatchName}
+                    onChange={(e) => setRcGenBatchName(e.target.value)}
+                    placeholder="如：2026-02-小红书-灵犀标准包"
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-rose-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block font-medium">充值套餐</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(rcPackages.length > 0 ? rcPackages : [
+                      { id: "single", name: "灵犀急救包", lingxi: 5, price: "5.9" },
+                      { id: "standard", name: "灵犀标准包", lingxi: 15, price: "19.9" },
+                      { id: "deep", name: "灵犀深度包", lingxi: 50, price: "49.9" },
+                    ]).map((pkg) => (
+                      <button
+                        key={pkg.id}
+                        onClick={() => setRcGenPackageId(pkg.id)}
+                        className={`rounded-xl p-3 text-center border-2 transition-colors ${
+                          rcGenPackageId === pkg.id
+                            ? "border-rose-400 bg-rose-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className="text-sm font-bold text-gray-800">{pkg.name}</div>
+                        <div className="text-xs text-rose-500 mt-0.5">{pkg.lingxi} 次灵犀</div>
+                        <div className="text-xs text-gray-400 mt-0.5">¥{pkg.price}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 mb-1.5 block font-medium">生成数量</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {[10, 20, 50, 100, 200].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setRcGenCount(n)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
+                          rcGenCount === n
+                            ? "border-rose-400 bg-rose-50 text-rose-500"
+                            : "border-gray-200 text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        {n} 张
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={generateRechargeCodes}
+                  disabled={rcGenerating || !rcGenBatchName.trim()}
+                  className="w-full py-3 text-sm font-semibold bg-rose-500 text-white rounded-xl disabled:opacity-50 hover:bg-rose-600 transition-colors"
+                >
+                  {rcGenerating ? "生成中..." : `生成 ${rcGenCount} 张充值码`}
+                </button>
+              </div>
+            </div>
+
+            {/* 生成结果 */}
+            {rcGeneratedCodes.length > 0 && (
+              <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-bold text-green-700">生成成功：{rcGeneratedCodes.length} 张</p>
+                  <button
+                    onClick={() => downloadRcCodes(rcGeneratedCodes, rcGenBatchName)}
+                    className="px-4 py-1.5 text-xs font-medium bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
+                  >
+                    下载 TXT
+                  </button>
+                </div>
+                <div className="bg-white rounded-xl p-3 max-h-40 overflow-y-auto">
+                  {rcGeneratedCodes.map((code) => (
+                    <div key={code} className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
+                      <span className="text-xs font-mono font-bold text-green-600">{code}</span>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(code); showMsg("已复制", "success"); }}
+                        className="text-xs text-gray-300 hover:text-rose-400"
+                      >
+                        复制
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 历史批次 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h3 className="text-sm font-bold text-gray-800 mb-3">历史批次</h3>
+              {rcLoading && <p className="text-xs text-gray-400 text-center py-4">加载中...</p>}
+              {!rcLoading && rcBatches.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-4">暂无充值码批次</p>
+              )}
+              {rcBatches.map((batch) => (
+                <div key={batch.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{batch.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {batch.packageName} · {batch.lingxiCount}次/张 · {batch.count}张
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {new Date(batch.createdAt).toLocaleDateString("zh-CN")}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* 使用说明 */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-xs text-blue-700 leading-relaxed space-y-1">
+              <p className="font-medium">💡 充值码使用流程</p>
+              <p>1. 在此页面批量生成充值码，下载 TXT 文件</p>
+              <p>2. 将 TXT 上传到阿奇索（agiso.com）91卡券仓库</p>
+              <p>3. 阿奇索在买家下单后自动发送充值码给买家</p>
+              <p>4. 买家在报告页/充值页输入充值码，灵犀自动到账</p>
+              <p className="text-blue-500 mt-2">
+                也可使用 HTTP 拉取模式：GET /api/deliver?secret=xxx&type=recharge&packageId=standard
+              </p>
             </div>
           </div>
         )}
@@ -857,57 +1095,82 @@ export default function AdminPage() {
         {/* ── Tab: 自动发货 ────────────────────────────────────────────── */}
         {activeTab === "deliver" && (
           <div className="space-y-4">
+
+            {/* 阿奇索推荐 */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🛍️</span>
+                <h3 className="font-bold text-gray-800 text-sm">推荐：阿奇索（agiso.com）自动发货</h3>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                阿奇索专门支持小红书个人店铺自动发货，买家付款后通过聊天窗口/短信自动发送激活码和充值码。
+              </p>
+              <div className="space-y-2">
+                <a
+                  href="https://www.agiso.com/product/aldsXhs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block border border-rose-100 rounded-xl p-3 hover:bg-rose-50 transition-colors"
+                >
+                  <div className="text-sm font-medium text-gray-800">阿奇索 · 小红书自动发货</div>
+                  <div className="text-xs text-gray-400 mt-0.5">支持聊天窗口发码/短信发码/网页自助提取，按SKU分发</div>
+                </a>
+              </div>
+            </div>
+
+            {/* 对接方式说明 */}
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg">📦</span>
-                <h3 className="font-bold text-gray-800 text-sm">方案 A · 预生成码池（推荐）</h3>
+                <h3 className="font-bold text-gray-800 text-sm">方案 A · 预生成码池（推荐新手）</h3>
               </div>
-              <p className="text-xs text-gray-500 leading-relaxed mb-4">
-                在「生成激活码」Tab 批量生成，导出 TXT 文件后上传到以下平台，客户付款后系统自动发码：
+              <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                批量生成激活码/充值码，导出 TXT，上传到阿奇索 91卡券仓库：
               </p>
-              <div className="space-y-2">
-                {[
-                  { name: "码小秘", url: "https://www.miaomiaoyun.com", desc: "支持闲鱼/小红书/微信自动发货，上传 TXT 码文件" },
-                  { name: "发货宝", url: "https://www.fahuobao.com", desc: "支持淘宝/闲鱼自动发货，码池管理完善" },
-                  { name: "易发货", url: "https://www.yifahu.cn", desc: "支持多平台，操作简单" },
-                ].map((platform) => (
-                  <div key={platform.name} className="border border-gray-100 rounded-xl p-3 flex items-start gap-3">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-800">{platform.name}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{platform.desc}</div>
-                    </div>
-                    <a href={platform.url} target="_blank" rel="noopener noreferrer" className="text-xs text-rose-500 underline flex-shrink-0 mt-0.5">
-                      访问 →
-                    </a>
-                  </div>
-                ))}
+              <div className="space-y-1.5 text-xs text-gray-600 leading-relaxed">
+                <p>1. 在「生成激活码」Tab 批量生成 → 下载 TXT</p>
+                <p>2. 在「充值码」Tab 批量生成 → 下载 TXT</p>
+                <p>3. 登录阿奇索 → 91卡券仓库 → 创建卡种 → 上传 TXT</p>
+                <p>4. 在自动发货后台绑定商品和卡种，按 SKU 分发</p>
               </div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-lg">🔗</span>
-                <h3 className="font-bold text-gray-800 text-sm">方案 B · API 实时生成（高级）</h3>
+                <h3 className="font-bold text-gray-800 text-sm">方案 B · API 实时拉取（高级）</h3>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed mb-3">
-                部署上线后，发货平台可通过以下接口实时拉取新激活码（每次调用生成一张新码）：
+                阿奇索支持 HTTP 拉取模式，每次订单自动调用接口实时生成新码：
               </p>
 
-              <div className="bg-gray-900 rounded-xl p-4 mb-3">
-                <p className="text-xs text-green-400 font-mono mb-1">GET 请求</p>
-                <p className="text-xs text-gray-300 font-mono break-all">
-                  {`https://你的域名/api/deliver?secret=管理员密码&planType=personal`}
-                </p>
+              <div className="bg-gray-900 rounded-xl p-4 mb-3 space-y-3">
+                <div>
+                  <p className="text-xs text-green-400 font-mono mb-1">激活码</p>
+                  <p className="text-xs text-gray-300 font-mono break-all">
+                    {`GET https://你的域名/api/deliver?secret=管理员密码&type=activation&planType=personal`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-purple-400 font-mono mb-1">充值码</p>
+                  <p className="text-xs text-gray-300 font-mono break-all">
+                    {`GET https://你的域名/api/deliver?secret=管理员密码&type=recharge&packageId=standard`}
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700">
-                ⚠️ planType 可选值：<code className="font-mono">personal</code>（个人版）·{" "}
-                <code className="font-mono">couple</code>（双人版）
+              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-700 space-y-1">
+                <p>激活码 planType：<code className="font-mono">personal</code>（个人版）· <code className="font-mono">couple</code>（双人版）</p>
+                <p>充值码 packageId：<code className="font-mono">single</code>（5次）· <code className="font-mono">standard</code>（15次）· <code className="font-mono">deep</code>（50次）</p>
               </div>
             </div>
 
-            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-xs text-rose-700">
-              💡 <strong>推荐流程</strong>：先用方案A上线销售，积累订单后再考虑接入方案B的API。
+            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-xs text-rose-700 leading-relaxed space-y-1">
+              <p className="font-medium">💡 小红书 SKU 对应关系</p>
+              <p>确保小红书商品的 SKU 名称与阿奇索后台的分发规则一一对应。例如：</p>
+              <p>· SKU「个人探索版」→ 发激活码（planType=personal）</p>
+              <p>· SKU「双人共鸣版」→ 发激活码（planType=couple）</p>
+              <p>· SKU「灵犀标准包」→ 发充值码（packageId=standard）</p>
             </div>
           </div>
         )}

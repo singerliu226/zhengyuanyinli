@@ -93,6 +93,158 @@ export async function generateCardKeyBatch(
   return codes;
 }
 
+// ── 充值码相关 ──────────────────────────────────────────────────────
+
+/** 充值码套餐定义（与小红书 SKU 对应） */
+export const RECHARGE_PACKAGES = [
+  { id: "single",   name: "灵犀急救包", lingxi: 5,  price: "5.9" },
+  { id: "standard", name: "灵犀标准包", lingxi: 15, price: "19.9" },
+  { id: "deep",     name: "灵犀深度包", lingxi: 50, price: "49.9" },
+] as const;
+
+export type RechargePackageId = (typeof RECHARGE_PACKAGES)[number]["id"];
+
+/** 根据套餐 ID 获取充值码套餐信息 */
+export function getRechargePackage(packageId: string) {
+  return RECHARGE_PACKAGES.find((p) => p.id === packageId);
+}
+
+/**
+ * 生成单个充值码
+ * 格式：LX-XXXX-XXXX（前缀 LX 与激活码区分，8位有效字符）
+ */
+export function generateRechargeCodeStr(): string {
+  return `LX-${generateSegment()}-${generateSegment()}`;
+}
+
+/**
+ * 批量生成充值码并写入数据库
+ *
+ * @param count 生成数量
+ * @param batchName 批次备注名（如 "2026-02-小红书-灵犀标准包-50张"）
+ * @param packageId 套餐 ID：single | standard | deep
+ * @returns 生成的充值码列表
+ */
+export async function generateRechargeCodeBatch(
+  count: number,
+  batchName: string,
+  packageId: string
+): Promise<string[]> {
+  const pkg = getRechargePackage(packageId);
+  if (!pkg) throw new Error(`无效的充值套餐: ${packageId}`);
+
+  log.info("开始批量生成充值码", { count, batchName, packageId, lingxi: pkg.lingxi });
+
+  const batch = await prisma.rechargeBatch.create({
+    data: {
+      name: batchName,
+      count,
+      packageId: pkg.id,
+      packageName: pkg.name,
+      lingxiCount: pkg.lingxi,
+    },
+  });
+
+  const codes: string[] = [];
+  let attempts = 0;
+  const MAX_ATTEMPTS = count * 3;
+
+  while (codes.length < count && attempts < MAX_ATTEMPTS) {
+    attempts++;
+    const code = generateRechargeCodeStr();
+
+    try {
+      await prisma.rechargeCode.create({
+        data: {
+          code,
+          lingxiCount: pkg.lingxi,
+          packageName: pkg.name,
+          batchId: batch.id,
+        },
+      });
+      codes.push(code);
+    } catch {
+      log.debug("充值码碰撞，重新生成", { code });
+    }
+  }
+
+  if (codes.length < count) {
+    log.warn("充值码生成数量未达目标", { target: count, actual: codes.length });
+  }
+
+  log.info("充值码批量生成完成", { count: codes.length, batchId: batch.id });
+  return codes;
+}
+
+/**
+ * 兑换充值码：校验码有效性 → 原子充值灵犀 → 标记已使用
+ *
+ * @param code 用户输入的充值码
+ * @param resultId 当前用户的 Result ID（从 JWT token 中获取）
+ * @returns 充值结果
+ */
+export async function redeemRechargeCode(
+  code: string,
+  resultId: string
+): Promise<
+  | { success: true; lingxiCount: number; newBalance: number; packageName: string }
+  | { success: false; error: string }
+> {
+  const normalizedCode = code.trim().toUpperCase();
+
+  log.info("尝试兑换充值码", { code: normalizedCode, resultId });
+
+  const rechargeCode = await prisma.rechargeCode.findUnique({
+    where: { code: normalizedCode },
+  });
+
+  if (!rechargeCode) {
+    log.warn("充值码不存在", { code: normalizedCode });
+    return { success: false, error: "充值码不存在，请检查输入是否正确" };
+  }
+
+  if (rechargeCode.status === "used") {
+    log.warn("充值码已被使用", { code: normalizedCode });
+    return { success: false, error: "该充值码已被使用" };
+  }
+
+  // 验证 Result 存在
+  const result = await prisma.result.findUnique({
+    where: { id: resultId },
+    select: { id: true, lingxi: true },
+  });
+
+  if (!result) {
+    return { success: false, error: "用户账户不存在" };
+  }
+
+  // 原子操作：标记充值码已使用 + 增加灵犀
+  const [, updatedResult] = await prisma.$transaction([
+    prisma.rechargeCode.update({
+      where: { code: normalizedCode },
+      data: { status: "used", resultId, usedAt: new Date() },
+    }),
+    prisma.result.update({
+      where: { id: resultId },
+      data: { lingxi: { increment: rechargeCode.lingxiCount } },
+    }),
+  ]);
+
+  log.info("充值码兑换成功", {
+    code: normalizedCode,
+    resultId,
+    lingxiCount: rechargeCode.lingxiCount,
+    newBalance: updatedResult.lingxi,
+  });
+
+  return {
+    success: true,
+    lingxiCount: rechargeCode.lingxiCount,
+    newBalance: updatedResult.lingxi,
+    packageName: rechargeCode.packageName,
+  };
+}
+
 /**
  * 生成设备指纹字符串（IP + UserAgent 的 MD5 哈希前16位）
  * 用于记录激活时的设备环境，辅助异常检测
