@@ -18,9 +18,9 @@ const PACKAGES = [
   {
     id: "single",
     emoji: "⚡",
-    name: "单次急救",
+    name: "灵犀急救包",
     lingxi: 5,
-    price: "5.9",
+    price: "5",
     original: "9.9",
     desc: "临时起意的两个疑问",
     recommended: false,
@@ -30,7 +30,7 @@ const PACKAGES = [
     emoji: "💓",
     name: "灵犀标准包",
     lingxi: 15,
-    price: "19.9",
+    price: "15",
     original: "29.9",
     desc: "足够深度探索你的关系模式",
     recommended: true,
@@ -40,7 +40,7 @@ const PACKAGES = [
     emoji: "🌟",
     name: "灵犀深度包",
     lingxi: 50,
-    price: "49.9",
+    price: "50",
     original: "79.9",
     desc: "含1次完整关系诊断（5次灵犀）",
     recommended: false,
@@ -91,18 +91,11 @@ function FallbackGuide() {
         </button>
       </div>
 
-      {/* 闲鱼 / 小红书 */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="bg-orange-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-sm mb-0.5">🐟</p>
-          <p className="text-xs font-medium text-orange-600">闲鱼</p>
-          <p className="text-xs text-gray-400 mt-0.5 leading-tight">搜索「正缘引力」</p>
-        </div>
-        <div className="bg-red-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-sm mb-0.5">📕</p>
-          <p className="text-xs font-medium text-red-600">小红书</p>
-          <p className="text-xs text-gray-400 mt-0.5 leading-tight">搜索「正缘引力」</p>
-        </div>
+      {/* 小红书 */}
+      <div className="bg-red-50 rounded-xl px-3 py-2 text-center">
+        <p className="text-sm mb-0.5">📕</p>
+        <p className="text-xs font-medium text-red-600">小红书</p>
+        <p className="text-xs text-gray-400 mt-0.5 leading-tight">搜索「正缘引力」</p>
       </div>
     </div>
   );
@@ -573,7 +566,7 @@ export default function RechargePage() {
                   </div>
                 )}
                 <p className="text-xs text-gray-400">
-                  充值码可在小红书/闲鱼购买，格式为 LX-开头
+                  充值码可在小红书购买，格式为 LX-开头
                 </p>
               </div>
             )}

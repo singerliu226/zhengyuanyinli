@@ -234,7 +234,7 @@ export default function ActivatePage() {
             已完成测试？用手机号找回报告 →
           </button>
           <p className="text-center text-gray-400 text-xs">
-            还没有激活码？小红书 / 闲鱼搜索「正缘引力」购买
+            还没有激活码？小红书搜索「正缘引力」购买
           </p>
         </div>
       </div>

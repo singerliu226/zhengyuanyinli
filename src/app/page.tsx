@@ -19,8 +19,8 @@ const PLANS = [
     id: "personal",
     emoji: "💫",
     name: "个人探索版",
-    price: "9.9",
-    original: "29.9",
+    price: "3.9",
+    original: "9.9",
     lingxi: 3,
     features: ["25题恋爱人格测试", "完整报告（城市+人格）", "3次灵犀追问"],
     scene: "一个人，先读懂自己",
@@ -30,8 +30,8 @@ const PLANS = [
     id: "couple",
     emoji: "💕",
     name: "双人同频版",
-    price: "24.9",
-    original: "49.9",
+    price: "10.9",
+    original: "24.9",
     lingxi: 8,
     features: ["两份独立测试报告", "双人匹配度深度分析", "各8次灵犀追问", "✨ AI关系顾问模式"],
     scene: "两个人，读懂彼此",
@@ -76,17 +76,6 @@ const BUY_CHANNELS = [
     btnClass: "bg-red-500 hover:bg-red-600 text-white",
     link: "", // 上线后填写小红书主页链接
   },
-  {
-    id: "xianyu",
-    icon: "🐟",
-    name: "闲鱼",
-    label: "搜索「正缘引力」购买",
-    hint: "购买后系统自动发送激活码到消息",
-    color: "border-orange-200 bg-orange-50",
-    textColor: "text-orange-600",
-    btnClass: "bg-orange-500 hover:bg-orange-600 text-white",
-    link: "", // 上线后填写闲鱼商品链接
-  },
 ] as const;
 
 interface BuyGuideModalProps {
@@ -128,8 +117,8 @@ function BuyGuideModal({ plan, onClose }: BuyGuideModalProps) {
         <div className="bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3 mb-4">
           <p className="text-xs font-bold text-rose-600 mb-1">📦 如何购买激活码</p>
           <p className="text-xs text-gray-500 leading-relaxed">
-            在小红书或闲鱼搜索「正缘引力」，选择对应套餐付款后，
-            激活码会通过平台消息发送给你，复制粘贴即可使用。
+            在小红书搜索「正缘引力」，选择对应套餐付款后，
+            激活码会通过平台消息自动发送给你，复制粘贴即可使用。
           </p>
         </div>
 

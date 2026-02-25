@@ -170,7 +170,7 @@ export default function SharePage() {
             </button>
           </Link>
           <p className="text-center text-gray-400 text-xs mt-3">
-            小红书 / 闲鱼搜索「正缘引力」购买激活码 · 首周 ¥9.9 起
+            小红书搜索「正缘引力」购买激活码 · ¥3.9 起
           </p>
         </div>
       </section>

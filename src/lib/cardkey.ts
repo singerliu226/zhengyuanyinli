@@ -97,9 +97,9 @@ export async function generateCardKeyBatch(
 
 /** 充值码套餐定义（与小红书 SKU 对应） */
 export const RECHARGE_PACKAGES = [
-  { id: "single",   name: "灵犀急救包", lingxi: 5,  price: "5.9" },
-  { id: "standard", name: "灵犀标准包", lingxi: 15, price: "19.9" },
-  { id: "deep",     name: "灵犀深度包", lingxi: 50, price: "49.9" },
+  { id: "single",   name: "灵犀急救包", lingxi: 5,  price: "5" },
+  { id: "standard", name: "灵犀标准包", lingxi: 15, price: "15" },
+  { id: "deep",     name: "灵犀深度包", lingxi: 50, price: "50" },
 ] as const;
 
 export type RechargePackageId = (typeof RECHARGE_PACKAGES)[number]["id"];

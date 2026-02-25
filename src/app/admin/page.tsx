@@ -737,9 +737,9 @@ export default function AdminPage() {
                   <label className="text-xs text-gray-500 mb-1.5 block font-medium">充值套餐</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(rcPackages.length > 0 ? rcPackages : [
-                      { id: "single", name: "灵犀急救包", lingxi: 5, price: "5.9" },
-                      { id: "standard", name: "灵犀标准包", lingxi: 15, price: "19.9" },
-                      { id: "deep", name: "灵犀深度包", lingxi: 50, price: "49.9" },
+                      { id: "single", name: "灵犀急救包", lingxi: 5, price: "5" },
+                      { id: "standard", name: "灵犀标准包", lingxi: 15, price: "15" },
+                      { id: "deep", name: "灵犀深度包", lingxi: 50, price: "50" },
                     ]).map((pkg) => (
                       <button
                         key={pkg.id}
@@ -874,8 +874,8 @@ export default function AdminPage() {
                   <label className="text-xs text-gray-500 mb-1.5 block font-medium">版本类型</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { value: "personal", label: "💫 个人探索版", price: "¥9.9", lingxi: "3次灵犀" },
-                      { value: "couple",   label: "💕 双人同频版", price: "¥24.9", lingxi: "各8次灵犀" },
+                      { value: "personal", label: "💫 个人探索版", price: "¥3.9", lingxi: "3次灵犀" },
+                      { value: "couple",   label: "💕 双人同频版", price: "¥10.9", lingxi: "各8次灵犀" },
                     ].map((plan) => (
                       <button
                         key={plan.value}

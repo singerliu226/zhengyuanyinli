@@ -176,7 +176,7 @@ export default function ResultPage() {
             </p>
             <Link href="/">
               <button className="btn-primary w-full py-3 text-sm mb-3">
-                重新测试 · ¥9.9起
+                重新测试 · ¥3.9起
               </button>
             </Link>
             <p className="text-xs text-gray-400">
