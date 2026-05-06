@@ -17,7 +17,7 @@ const PLAN_INFO: Record<string, { emoji: string; name: string; tips: string[]; b
     emoji: "💫",
     name: "个人探索版",
     tips: [
-      "完成 25 道题（约3分钟），立即生成你的恋爱人格报告",
+      "完成 29 道题（约3分钟，含4题MBTI参考），立即生成你的恋爱人格报告",
       "报告解锁后，可用 3 次灵犀向 AI「缘缘」追问",
       "报告有效期 72 小时，灵犀次数永久有效",
     ],
@@ -27,7 +27,7 @@ const PLAN_INFO: Record<string, { emoji: string; name: string; tips: string[]; b
     emoji: "💕",
     name: "双人同频版",
     tips: [
-      "你是发起人，先完成 25 道题生成自己的报告",
+      "你是发起人，先完成 29 道题生成自己的报告",
       "报告页会生成一个「邀请链接」，发给你的伴侣/闺蜜",
       "对方点击链接、完成测试后，你们就能开启双人同频 AI 对话",
       "你和对方各有 8 次灵犀可使用",
@@ -38,7 +38,7 @@ const PLAN_INFO: Record<string, { emoji: string; name: string; tips: string[]; b
     emoji: "🎁",
     name: "礼盒限定版",
     tips: [
-      "你是发起人，先完成 25 道题生成自己的报告",
+      "你是发起人，先完成 29 道题生成自己的报告",
       "报告页会生成邀请链接，分享给收礼人",
       "对方完成测试后可开启双人同频 AI 对话",
       "你和对方各有 15 次灵犀可使用",
@@ -112,6 +112,7 @@ export default function ActivatePage() {
       sessionStorage.setItem("cardKeyId", data.cardKeyId);
       sessionStorage.setItem("planType", data.planType ?? "personal");
       sessionStorage.setItem("activatedPhone", phone.slice(0, 3) + "****" + phone.slice(-4));
+      localStorage.setItem("lcm_pending_cardKeyId", data.cardKeyId);
       localStorage.setItem("lcm_pending_phone", phone);
 
       // 显示版本引导弹层，而非直接跳转

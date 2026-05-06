@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
@@ -34,11 +34,7 @@ export default function SharePage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  useEffect(() => {
-    fetchShareInfo();
-  }, [token]);
-
-  async function fetchShareInfo() {
+  const fetchShareInfo = useCallback(async () => {
     try {
       const res = await fetch(`/api/result?token=${token}`);
       if (!res.ok) { setNotFound(true); return; }
@@ -57,7 +53,11 @@ export default function SharePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    fetchShareInfo();
+  }, [fetchShareInfo]);
 
   if (loading) {
     return (
@@ -152,7 +152,7 @@ export default function SharePage() {
           {/* 功能亮点 */}
           <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 space-y-2">
             {[
-              { icon: "🧬", text: "25题 + MBTI 联合测出你的恋爱密码" },
+              { icon: "🧬", text: "29题 + MBTI 联合测出你的恋爱密码" },
               { icon: "🏙️", text: "匹配最适合你谈恋爱的人格类型和城市" },
               { icon: "💬", text: "AI 缘缘帮你解读报告、解答感情烦恼" },
             ].map((item) => (

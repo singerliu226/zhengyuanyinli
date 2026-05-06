@@ -2,7 +2,7 @@
  * 答题评分算法模块
  *
  * 算法思路：
- * 1. 收集用户25道题的选项（A/B/C/D）
+ * 1. 收集用户29道题的选项（A/B/C/D）
  * 2. 对每道题的选项权重进行累加，得到5个维度的原始总分
  * 3. 将5维度原始分归一化到 0-100 区间
  * 4. 用归一化后的5维向量与8种人格的标准向量进行余弦相似度计算
@@ -53,7 +53,7 @@ function scoresToArray(scores: DimensionScores): number[] {
 /**
  * 主评分函数：接收用户答案，返回完整评分结果
  *
- * @param answers 用户答案映射，key 为题目 ID（1-25），value 为选项 ID（A/B/C/D）
+ * @param answers 用户答案映射，key 为题目 ID（1-29），value 为选项 ID（A/B/C/D）
  * @returns 完整的评分结果，包含归一化分数和匹配人格
  */
 /**
@@ -108,9 +108,9 @@ export function calculateScore(answers: UserAnswers): ScoringResult {
   log.debug("原始维度得分", rawScores);
 
   // Step 2: 归一化到 0-100
-  // 每道题单个维度最高为3分，共25题（但各维度不是每题都满分，理论最大约为5题×3=15分，
-  // 但实际每题都有该维度权重，最保守的最大值取 25*3=75 作为基准）
-  const MAX_RAW = 75; // 25题 × 最大单题得分3分
+  // 每道 D1-D5 题的单个维度最高为3分，共25道关系场景题。
+  // Q26-Q29 仅用于生成 MBTI 参考，不参与五维评分。
+  const MAX_RAW = 75; // 25道关系题 × 最大单题得分3分
   const normalizedScores: DimensionScores = {
     d1: Math.min(100, Math.round((rawScores.d1 / MAX_RAW) * 100)),
     d2: Math.min(100, Math.round((rawScores.d2 / MAX_RAW) * 100)),

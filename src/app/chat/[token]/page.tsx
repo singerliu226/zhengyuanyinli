@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import CustomerService from "@/components/CustomerService";
@@ -117,18 +117,7 @@ export default function ChatPage() {
   const [hasSentMessage, setHasSentMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // 检测当前是否为深夜模式（北京时间 23:00-06:00）
-    const bjHour = (new Date().getUTCHours() + 8) % 24;
-    setIsNight(bjHour >= 23 || bjHour < 6);
-    initChat();
-  }, [token]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  async function initChat() {
+  const initChat = useCallback(async () => {
     try {
       const res = await fetch(`/api/result?token=${token}`);
       const data = await res.json();
@@ -145,12 +134,22 @@ export default function ChatPage() {
         setPartnerPersonalityType(data.partnerInfo.personalityType ?? "");
       }
 
+      const historyRes = await fetch(`/api/chat?token=${token}&coupleMode=${coupleMode}`);
+      if (historyRes.ok) {
+        const historyData = await historyRes.json();
+        if (Array.isArray(historyData.messages) && historyData.messages.length > 0) {
+          setMessages(historyData.messages as Message[]);
+          setHasSentMessage(historyData.messages.some((m: Message) => m.role === "user"));
+          return;
+        }
+      }
+
       const isNightNow = (new Date().getUTCHours() + 8) % 24 >= 23 ||
                          (new Date().getUTCHours() + 8) % 24 < 6;
 
       let welcomeMsg = coupleMode
-        ? `我已经读完你和 TA 的报告了。\n\n你是「${data.personalityType}」，TA 是「${data.partnerInfo?.personalityType ?? "对方"}」——两种不同的人，在同一段关系里摸索。\n\n你们最近有什么让你说不清楚的事吗？`
-        : `你好，我是缘缘。\n\n我已经看完你的报告了——你是「${data.personalityType}」，一个${data.cityMatch}气质的人。\n\n有什么想聊的，直接说吧。`;
+        ? `我已经读完你和 TA 的报告了。\n\n你是「${data.personalityType}」，TA 是「${data.partnerInfo?.personalityType ?? "对方"}」。我会尽量站在你们中间，把说不清楚的地方讲明白。\n\n最近你们卡在哪件事上？`
+        : `你好，我是缘缘。\n\n我看完你的报告了——你是「${data.personalityType}」，带着一点${data.cityMatch}的气质。\n\n你可以直接说最近困扰你的事，我会顺着你的真实情况聊。`;
 
       if (isNightNow) {
         welcomeMsg = `夜深了，还没睡。\n\n我在这里——你是「${data.personalityType}」。有什么在心里转的事吗？`;
@@ -162,7 +161,18 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [coupleMode, token]);
+
+  useEffect(() => {
+    // 检测当前是否为深夜模式（北京时间 23:00-06:00）
+    const bjHour = (new Date().getUTCHours() + 8) % 24;
+    setIsNight(bjHour >= 23 || bjHour < 6);
+    initChat();
+  }, [initChat]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   /** 提交关系诊断表单，构造诊断请求消息 */
   function handleDiagnosisSubmit() {
@@ -359,7 +369,9 @@ export default function ChatPage() {
                     : "bg-white text-gray-700 rounded-tl-sm shadow-sm"
               }`}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <p className={`whitespace-pre-wrap ${msg.content ? "" : "cursor-blink text-gray-400"}`}>
+                {msg.content || (isStreaming && i === messages.length - 1 ? "缘缘正在想" : "")}
+              </p>
             </div>
           </div>
         ))}

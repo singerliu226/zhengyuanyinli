@@ -5,18 +5,14 @@ export const dynamic = "force-dynamic";
  *
  * 双人邀请接口：伴侣通过 coupleToken 完成测试并与发起人结对
  *
- * BUG-FIX: 使用 Prisma 交互式事务（interactive transaction）将
- * virtualCardKey + partnerResult 创建 + primaryResult 双向绑定全部纳入同一事务，
- * 保证任意步骤失败时完整回滚，不会产生孤立记录或单向绑定。
+ * 使用批量事务将 virtualCardKey + partnerResult 创建 + primaryResult 双向绑定
+ * 全部纳入同一事务。避免交互式事务在部分部署连接方式下不稳定。
  *
  * 请求体：{ coupleToken: string, answers: Record<number, string> }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-
-/** 从 prisma.$transaction 签名自动推导事务客户端类型，兼容所有 Prisma 版本 */
-type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 import { calculateScore, type UserAnswers } from "@/lib/scoring";
 import { generateReport } from "@/lib/report";
 import { signResultToken } from "@/lib/jwt";
@@ -70,30 +66,31 @@ export async function POST(req: NextRequest) {
     const initialLingxi = planType === "gift" ? 15 : 8;
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
 
-    // 预签临时 token（异步函数无法在事务回调内调用）
-    const tempToken = await signResultToken({
-      resultId: "placeholder_partner",
+    // 预先生成 ID 和 token，避免先写临时 token 再二次更新。
+    const virtualCardKeyId = `ck_partner_${nanoid(16)}`;
+    const partnerResultId = `rs_partner_${nanoid(16)}`;
+    const finalToken = await signResultToken({
+      resultId: partnerResultId,
       personalityType: reportData.personalityName,
     });
 
-    // ── 交互式事务：原子完成三步操作 ──────────────────────────────────────
+    // ── 批量事务：原子完成三步操作 ──────────────────────────────────────
     // 任何一步失败自动回滚全部操作
-    const partnerResult = await prisma.$transaction(async (tx: TxClient) => {
-      // Step 1: 为伴侣创建虚拟 CardKey（外键约束要求，伴侣无需真实激活码）
-      const virtualCardKey = await tx.cardKey.create({
+    await prisma.$transaction([
+      prisma.cardKey.create({
         data: {
+          id: virtualCardKeyId,
           code: `PARTNER-${nanoid(12).toUpperCase()}`,
           status: "used",
           planType: "partner",
           usedAt: new Date(),
         },
-      });
-
-      // Step 2: 创建伴侣 Result（partnerId 先指向发起人）
-      const partner = await tx.result.create({
+      }),
+      prisma.result.create({
         data: {
-          token: tempToken,
-          cardKeyId: virtualCardKey.id,
+          id: partnerResultId,
+          token: finalToken,
+          cardKeyId: virtualCardKeyId,
           personalityType: reportData.personalityName,
           cityMatch: reportData.cityMatch,
           scores: reportData.scores,
@@ -102,31 +99,16 @@ export async function POST(req: NextRequest) {
           expiresAt,
           partnerId: primaryResult.id,
         },
-      });
-
-      // Step 3: 更新发起人 partnerId（建立双向绑定）
-      await tx.result.update({
+      }),
+      prisma.result.update({
         where: { id: primaryResult.id },
-        data: { partnerId: partner.id },
-      });
-
-      return partner;
-    });
-
-    // 用真实 resultId 重新签发最终 token（在事务外，避免影响事务超时）
-    const finalToken = await signResultToken({
-      resultId: partnerResult.id,
-      personalityType: reportData.personalityName,
-    });
-
-    await prisma.result.update({
-      where: { id: partnerResult.id },
-      data: { token: finalToken },
-    });
+        data: { partnerId: partnerResultId },
+      }),
+    ]);
 
     logger.info("双人结对成功", {
       primaryResultId: primaryResult.id,
-      partnerResultId: partnerResult.id,
+      partnerResultId,
       primaryType: primaryResult.personalityType,
       partnerType: reportData.personalityName,
     });
@@ -138,7 +120,7 @@ export async function POST(req: NextRequest) {
       partnerCityMatch: reportData.cityMatch,
     });
   } catch (err) {
-    logger.error("双人加入接口异常", { error: (err as Error).message });
+    logger.error("双人加入接口异常", { error: (err as Error).message, stack: (err as Error).stack });
     return NextResponse.json({ success: false, error: "服务器异常，请稍后重试" }, { status: 500 });
   }
 }

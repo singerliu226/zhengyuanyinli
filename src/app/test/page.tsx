@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { QUESTIONS } from "@/data/questions";
 
 type Answers = Record<number, "A" | "B" | "C" | "D">;
+type TestDraft = {
+  currentIndex: number;
+  answers: Answers;
+};
 
 /**
- * 测试页 - 25道题目答题流程
+ * 测试页 - 29道题目答题流程
  * 设计：一次显示一题，底部进度条，答完自动跳下一题
  * 所有答案本地维护，最后一题提交时统一发送
  */
@@ -21,17 +25,35 @@ export default function TestPage() {
 
   const currentQuestion = QUESTIONS[currentIndex];
   const total = QUESTIONS.length;
-  const progress = Math.round(((currentIndex) / total) * 100);
+  const progress = Math.round(((currentIndex + 1) / total) * 100);
+  const draftKey = cardKeyId ? `lcm_test_draft_${cardKeyId}` : "";
 
   useEffect(() => {
     // 从 sessionStorage 获取激活凭证
-    const id = sessionStorage.getItem("cardKeyId");
+    const id = sessionStorage.getItem("cardKeyId") ?? localStorage.getItem("lcm_pending_cardKeyId");
     if (!id) {
       router.replace("/activate");
       return;
     }
+    sessionStorage.setItem("cardKeyId", id);
     setCardKeyId(id);
-  }, [router]);
+
+    const savedDraft = localStorage.getItem(`lcm_test_draft_${id}`);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft) as TestDraft;
+        setAnswers(draft.answers ?? {});
+        setCurrentIndex(Math.min(Math.max(draft.currentIndex ?? 0, 0), total - 1));
+      } catch {
+        localStorage.removeItem(`lcm_test_draft_${id}`);
+      }
+    }
+  }, [router, total]);
+
+  useEffect(() => {
+    if (!draftKey || submitting) return;
+    localStorage.setItem(draftKey, JSON.stringify({ currentIndex, answers } satisfies TestDraft));
+  }, [answers, currentIndex, draftKey, submitting]);
 
   // 未获取到激活凭证前不渲染题目（防止空白闪屏）
   if (!cardKeyId) {
@@ -78,6 +100,8 @@ export default function TestPage() {
 
       // 清除 sessionStorage，把 token 持久化到 localStorage 供首页浮动按钮读取
       sessionStorage.removeItem("cardKeyId");
+      localStorage.removeItem("lcm_pending_cardKeyId");
+      localStorage.removeItem(`lcm_test_draft_${cardKeyId}`);
       localStorage.setItem("lcm_token", data.token);
       router.push(`/result/${data.token}`);
     } catch {
@@ -93,7 +117,7 @@ export default function TestPage() {
         <div className="text-center">
           <div className="text-5xl mb-6 animate-pulse">🔮</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">正在分析你的恋爱人格...</h2>
-          <p className="text-gray-500 text-sm">基于你的答案，分析你的正缘</p>
+          <p className="text-gray-500 text-sm">基于你的答案，生成恋爱人格、城市气质和追问建议</p>
           <div className="mt-6 h-1.5 w-48 bg-gray-200 rounded-full overflow-hidden mx-auto">
             <div className="h-full bg-gradient-to-r from-rose-400 to-pink-400 rounded-full animate-pulse" style={{ width: "70%" }} />
           </div>
@@ -135,6 +159,9 @@ export default function TestPage() {
               }[currentQuestion.dimension]
             }
           </div>
+          <p className="mt-1 text-xs text-gray-400">
+            凭第一反应作答即可，没有标准答案
+          </p>
         </div>
       </header>
 
@@ -143,6 +170,9 @@ export default function TestPage() {
         <div className="max-w-sm mx-auto">
           {/* 题目文字 */}
           <div className="bg-white rounded-3xl p-6 shadow-sm mb-4">
+            <div className="text-xs text-rose-400 font-semibold mb-2">
+              {currentQuestion.dimension === "MBTI" ? "最后4题用于生成MBTI参考" : "关系场景题"}
+            </div>
             <p className="text-base font-semibold text-gray-800 leading-relaxed">
               {currentQuestion.text}
             </p>

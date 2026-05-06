@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import CustomerService from "@/components/CustomerService";
@@ -167,12 +167,7 @@ export default function RechargePage() {
 
   const currentPkg = PACKAGES.find((p) => p.id === selectedPkg) ?? PACKAGES[1];
 
-  // 页面加载时获取当前余额
-  useEffect(() => {
-    fetchLingxiLeft();
-  }, []);
-
-  async function fetchLingxiLeft() {
+  const fetchLingxiLeft = useCallback(async () => {
     try {
       const res = await fetch(`/api/result?token=${token}`);
       const data = await res.json();
@@ -180,7 +175,12 @@ export default function RechargePage() {
     } catch {
       // 静默失败
     }
-  }
+  }, [token]);
+
+  // 页面加载时获取当前余额
+  useEffect(() => {
+    fetchLingxiLeft();
+  }, [fetchLingxiLeft]);
 
   /**
    * 轮询余额直到检测到灵犀增加
@@ -189,7 +189,7 @@ export default function RechargePage() {
    *   2. 扫码收款后等待管理员手动充值
    * 最多轮询 60 次（约 120 秒），超时后提示联系客服
    */
-  async function startPolling(initialBalance?: number) {
+  const startPolling = useCallback(async (initialBalance?: number) => {
     setPolling(true);
     const baseline = initialBalance ?? lingxiLeft ?? 0;
     let count = 0;
@@ -221,7 +221,7 @@ export default function RechargePage() {
         setPollResult("timeout");
       }
     }, 2000);
-  }
+  }, [lingxiLeft, token]);
 
   // ─── 充值码兑换 ─────────────────────────────────────────────────────────
   async function handleRedeemCode() {
@@ -375,7 +375,7 @@ export default function RechargePage() {
       sessionStorage.removeItem(`lingxi_baseline_${token}`);
       startPolling(baseline);
     }
-  }, [isReturnFromPayment]);
+  }, [isReturnFromPayment, startPolling, token]);
 
   /**
    * 虎皮椒正式支付的轮询结果展示（仅 PAYJS_ENABLED 时使用）

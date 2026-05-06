@@ -12,7 +12,7 @@
  * - 找到报告后自动写入 localStorage，供首页浮动按钮读取
  */
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -41,18 +41,7 @@ export default function FindPage() {
   const [hasPending, setHasPending] = useState(false);  // 有未完成测试
   const [reports, setReports] = useState<ReportItem[] | null>(null);
 
-  // 若 URL 携带 phone 参数（从激活页跳转过来），自动填入并触发查询
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const phoneParam = params.get("phone");
-    if (phoneParam) {
-      setPhone(phoneParam);
-      triggerFind(phoneParam);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function triggerFind(targetPhone: string) {
+  const triggerFind = useCallback(async (targetPhone: string) => {
     if (!/^1[3-9]\d{9}$/.test(targetPhone.trim())) return;
     setLoading(true);
     setError("");
@@ -78,7 +67,17 @@ export default function FindPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  // 若 URL 携带 phone 参数（从激活页跳转过来），自动填入并触发查询
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const phoneParam = params.get("phone");
+    if (phoneParam) {
+      setPhone(phoneParam);
+      triggerFind(phoneParam);
+    }
+  }, [triggerFind]);
 
   async function handleFind() {
     if (!/^1[3-9]\d{9}$/.test(phone.trim())) {
@@ -130,7 +129,7 @@ export default function FindPage() {
             <div className="text-3xl mb-2">📝</div>
             <p className="text-sm font-bold text-amber-700 mb-1">你有一个尚未完成的测试</p>
             <p className="text-xs text-amber-600 leading-relaxed mb-4">
-              你激活了激活码，但当时没有完成25道题。<br />
+              你激活了激活码，但当时没有完成29道题。<br />
               重新输入激活码即可继续，答案从头开始作答。
             </p>
             <button

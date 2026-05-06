@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { QUESTIONS } from "@/data/questions";
 
 type Answers = Record<number, "A" | "B" | "C" | "D">;
+type CoupleDraft = {
+  currentIndex: number;
+  answers: Answers;
+};
 
 /**
  * 双人版伴侣测试入口页
@@ -12,7 +16,7 @@ type Answers = Record<number, "A" | "B" | "C" | "D">;
  * 流程：
  * 1. 用户通过邀请链接进入（URL：/couple/{coupleToken}）
  * 2. 显示「你的伴侣邀请你一起测试」欢迎页
- * 3. 直接做25道题（无需激活码，因为已包含在发起人的双人版里）
+ * 3. 直接做29道题（无需激活码，因为已包含在发起人的双人版里）
  * 4. 提交后跳转到自己的报告页
  */
 export default function CoupleJoinPage() {
@@ -28,7 +32,28 @@ export default function CoupleJoinPage() {
 
   const total = QUESTIONS.length;
   const currentQuestion = QUESTIONS[currentIndex];
-  const progress = Math.round((currentIndex / total) * 100);
+  const progress = Math.round(((currentIndex + 1) / total) * 100);
+  const draftKey = `lcm_couple_draft_${coupleToken}`;
+
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(draftKey);
+    if (!savedDraft) return;
+    try {
+      const draft = JSON.parse(savedDraft) as CoupleDraft;
+      setAnswers(draft.answers ?? {});
+      setCurrentIndex(Math.min(Math.max(draft.currentIndex ?? 0, 0), total - 1));
+      if (Object.keys(draft.answers ?? {}).length > 0) {
+        setPhase("test");
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+  }, [draftKey, total]);
+
+  useEffect(() => {
+    if (phase !== "test") return;
+    localStorage.setItem(draftKey, JSON.stringify({ currentIndex, answers } satisfies CoupleDraft));
+  }, [answers, currentIndex, draftKey, phase]);
 
   function handleSelect(optionId: "A" | "B" | "C" | "D") {
     const newAnswers = { ...answers, [currentQuestion.id]: optionId };
@@ -64,6 +89,7 @@ export default function CoupleJoinPage() {
 
       setResultToken(data.token);
       setPartnerType(data.partnerPersonalityType ?? "");
+      localStorage.removeItem(draftKey);
       setPhase("done");
     } catch {
       setError("网络异常，请检查网络后重试");
@@ -83,7 +109,7 @@ export default function CoupleJoinPage() {
             两份报告在手，AI 缘缘能帮你们读懂彼此。
           </p>
           <div className="bg-rose-50 rounded-2xl p-4 mb-6 text-left space-y-2">
-            <p className="text-xs text-gray-600">📝 25道题 + MBTI，约3分钟完成</p>
+            <p className="text-xs text-gray-600">📝 29道题 + MBTI，约3分钟完成</p>
             <p className="text-xs text-gray-600">📊 获得你的专属恋爱人格报告</p>
             <p className="text-xs text-gray-600">💕 双人同频 AI 对话，理解彼此更深一层</p>
           </div>

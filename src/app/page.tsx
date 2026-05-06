@@ -22,7 +22,7 @@ const PLANS = [
     price: "3.9",
     original: "9.9",
     lingxi: 3,
-    features: ["25题恋爱人格测试", "完整报告（城市+人格）", "3次灵犀追问"],
+    features: ["29题人格测试（含MBTI）", "完整报告（城市+人格）", "3次灵犀追问"],
     scene: "一个人，先读懂自己",
     badge: null,
   },
@@ -33,7 +33,7 @@ const PLANS = [
     price: "10.9",
     original: "24.9",
     lingxi: 8,
-    features: ["两份独立测试报告", "双人匹配度深度分析", "各8次灵犀追问", "✨ AI关系顾问模式"],
+    features: ["两份独立测试报告", "双人匹配度深度分析", "各8次灵犀追问", "AI关系顾问模式"],
     scene: "两个人，读懂彼此",
     badge: "主推",
   },
@@ -76,6 +76,13 @@ const BUY_CHANNELS = [
     btnClass: "bg-red-500 hover:bg-red-600 text-white",
     link: "", // 上线后填写小红书主页链接
   },
+] as const;
+
+const OUTCOME_PREVIEW = [
+  { label: "恋爱人格", value: "8种人格画像" },
+  { label: "恋爱城市", value: "匹配你的气质场域" },
+  { label: "理想型", value: "可识别的相处特征" },
+  { label: "下一步", value: "AI缘缘继续追问" },
 ] as const;
 
 interface BuyGuideModalProps {
@@ -441,25 +448,37 @@ export default function HomePage() {
       </div>
 
       {/* 顶部标题区 */}
-      <section className="pt-12 pb-6 px-6 text-center">
-        <div className="inline-flex items-center gap-1.5 bg-rose-100 text-rose-500 text-xs font-medium px-4 py-1.5 rounded-full mb-6">
+      <section className="pt-10 pb-5 px-6 text-center">
+        <div className="inline-flex items-center gap-1.5 bg-white/80 border border-rose-100 text-rose-500 text-xs font-medium px-4 py-1.5 rounded-full mb-6 shadow-sm">
           <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-pulse" />
-          首周特惠 · 已有 3,847 人解锁报告
+          29题 · 约3分钟 · 测完即可追问
         </div>
 
         <h1 className="text-4xl font-bold mb-3 text-gradient leading-tight">
           正缘引力
         </h1>
 
-        <h2 className="text-xl font-semibold text-gray-700 mb-3 leading-snug">
-          发现你的正缘
+        <h2 className="text-xl font-semibold text-gray-800 mb-3 leading-snug">
+          先看懂你的恋爱模式，再判断谁适合你
         </h2>
 
-        <p className="text-gray-500 text-sm max-w-xs mx-auto leading-loose">
-          先测试了解你自己，才能遇见正缘
+        <p className="text-gray-500 text-sm max-w-sm mx-auto leading-loose">
+          基于真实关系场景，生成恋爱人格、城市气质、理想型画像和相处提醒。
           <br />
-          <span className="text-rose-400 font-medium">双人版：帮你读懂 TA，让 TA 理解你</span>
+          <span className="text-rose-500 font-semibold">双人版会同时读取两份报告，帮你们把误会翻译成人话。</span>
         </p>
+      </section>
+
+      {/* 结果预览 */}
+      <section className="px-4 pb-4">
+        <div className="max-w-sm mx-auto grid grid-cols-2 gap-2">
+          {OUTCOME_PREVIEW.map((item) => (
+            <div key={item.label} className="bg-white/85 border border-white rounded-2xl px-4 py-3 shadow-sm">
+              <div className="text-xs text-gray-400 mb-1">{item.label}</div>
+              <div className="text-sm font-semibold text-gray-800 leading-snug">{item.value}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* 定价卡片（点击选择，高亮显示） */}
@@ -504,7 +523,7 @@ export default function HomePage() {
                     <span
                       key={f}
                       className={`text-xs px-2.5 py-1 rounded-full ${
-                        f.startsWith("✨")
+                        f.includes("AI关系顾问")
                           ? "bg-rose-50 text-rose-500 font-medium"
                           : "bg-gray-50 text-gray-500"
                       }`}
@@ -524,14 +543,14 @@ export default function HomePage() {
         <div className="max-w-sm mx-auto bg-gradient-to-br from-rose-50 to-pink-50 rounded-3xl p-5 border border-rose-100">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">💌</span>
-            <h3 className="font-bold text-gray-800 text-sm">你们不是不爱，是频道不对</h3>
+            <h3 className="font-bold text-gray-800 text-sm">双人版解决的是“说不清”的关系问题</h3>
           </div>
 
           <div className="space-y-2 mb-4">
             {[
-              "你需要稳定感，TA 渴望新鲜感",
-              "你用沉默思考，TA 以为你在生气",
-              "你喜欢快决策，TA 需要慢下来",
+              "把双方人格差异拆成可沟通的语言",
+              "解释争吵背后的真实需求，而不是评判谁对谁错",
+              "给出当下可以照着做的沟通句式和相处建议",
             ].map((scene) => (
               <div key={scene} className="flex items-center gap-2 text-xs text-gray-500">
                 <span className="text-rose-300">·</span>
@@ -542,9 +561,8 @@ export default function HomePage() {
 
           <div className="bg-white/80 rounded-2xl px-4 py-3">
             <p className="text-xs text-gray-600 leading-relaxed">
-              这些分歧，背后都是人格差异。<br />
-              缘缘会同时读完你们<strong>两份报告</strong>，作为中立的
-              <strong>关系顾问</strong>，告诉你们：
+              完成两份测试后，缘缘会同时读完你们<strong>两份报告</strong>，作为中立的
+              <strong>AI关系顾问</strong>，告诉你们：
               <br />
               <span className="text-rose-500">为什么会这样 · 怎么找到彼此的平衡点</span>
             </p>
@@ -564,12 +582,12 @@ export default function HomePage() {
             {
               icon: "🧠",
               title: "恋爱人格测试",
-              desc: "依恋理论 + 大五人格双底座，25道真实场景题，测出你独特的恋爱密码",
+              desc: "依恋风格 + 关系价值观 + MBTI线索，29道真实场景题测出你的恋爱模式",
             },
             {
               icon: "🏙️",
               title: "人格匹配",
-              desc: "基于你的人格特质匹配最适合你谈恋爱的性格、城市，超准且超好分享",
+              desc: "基于你的人格特质匹配适合谈恋爱的性格与城市，并生成可分享的人格卡片",
             },
             {
               icon: "🔒",
@@ -638,7 +656,7 @@ export default function HomePage() {
           </Link>
 
           <p className="text-center text-gray-300 text-xs">
-            首周特惠 · 名额有限 · 随时恢复原价
+            付款后获得激活码 · 报告仅供自我探索，不替代专业咨询
           </p>
         </div>
       </section>

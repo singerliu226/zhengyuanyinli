@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import CustomerService from "@/components/CustomerService";
@@ -62,7 +62,20 @@ export default function ResultPage() {
   const [copySuccess, setCopySuccess] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
 
-  useEffect(() => { fetchReport(); }, [token]);
+  const fetchReport = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/result?token=${token}`);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "报告加载失败"); return; }
+      setInfo(data as ResultInfo);
+    } catch {
+      setError("网络异常，请刷新重试");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { fetchReport(); }, [fetchReport]);
 
   useEffect(() => {
     if (!info?.expiresAt) return;
@@ -80,19 +93,6 @@ export default function ResultPage() {
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
     return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-
-  async function fetchReport() {
-    try {
-      const res = await fetch(`/api/result?token=${token}`);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "报告加载失败"); return; }
-      setInfo(data as ResultInfo);
-    } catch {
-      setError("网络异常，请刷新重试");
-    } finally {
-      setLoading(false);
-    }
   }
 
   function handleCopyInvite() {

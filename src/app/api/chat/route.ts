@@ -28,6 +28,48 @@ import {
 } from "@/lib/ai";
 import logger from "@/lib/logger";
 
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const token = searchParams.get("token");
+    const coupleMode = searchParams.get("coupleMode") === "true";
+
+    if (!token) {
+      return NextResponse.json({ error: "缺少身份凭证" }, { status: 401 });
+    }
+
+    const payload = await verifyResultToken(token);
+    if (!payload) {
+      return NextResponse.json({ error: "凭证已过期，请重新打开报告页面" }, { status: 401 });
+    }
+
+    const chats = await prisma.chat.findMany({
+      where: {
+        resultId: payload.resultId,
+        isCoupleMode: coupleMode,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        role: true,
+        content: true,
+        lingxiCost: true,
+      },
+    });
+
+    return NextResponse.json({
+      messages: chats.reverse().map((chat) => ({
+        role: chat.role,
+        content: chat.content,
+        lingxiCost: chat.lingxiCost,
+      })),
+    });
+  } catch (err) {
+    logger.error("Chat 历史查询异常", { error: (err as Error).message, stack: (err as Error).stack });
+    return NextResponse.json({ error: "服务器异常，请稍后重试" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   // 最前置检测：环境变量未配置时立即返回，避免后续流程出现误导性错误
   if (!process.env.QWEN_API_KEY) {
@@ -238,38 +280,59 @@ export async function POST(req: NextRequest) {
     }
 
     logger.info("[STEP] AI 流已创建，开始管道传输");
-    // TransformStream 在流结束后将 AI 回复存库
     let fullResponse = "";
-    const encoder = new TextEncoder();
-    const transformStream = new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        const text = new TextDecoder().decode(chunk);
-        fullResponse += text;
-        controller.enqueue(encoder.encode(text));
-      },
-      async flush() {
+    const readable = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = aiStream.getReader();
         try {
-          await prisma.chat.create({
-            data: {
-              resultId: result.id,
-              role: "assistant",
-              content: fullResponse,
-              lingxiCost: lingxiCost,
-              isCoupleMode: coupleMode,
-            },
-          });
-          logger.debug("AI 回复已存库", { resultId: result.id, length: fullResponse.length });
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = new TextDecoder().decode(value);
+            fullResponse += text;
+            controller.enqueue(value);
+          }
+
+          controller.close();
+
+          try {
+            await prisma.chat.create({
+              data: {
+                resultId: result.id,
+                role: "assistant",
+                content: fullResponse,
+                lingxiCost,
+                isCoupleMode: coupleMode,
+              },
+            });
+            logger.debug("AI 回复已存库", { resultId: result.id, length: fullResponse.length });
+          } catch (storeErr) {
+            logger.error("AI 回复存库失败", { error: (storeErr as Error).message, resultId: result.id });
+          }
         } catch (err) {
-          logger.error("AI 回复存库失败", { error: (err as Error).message });
+          logger.error("AI 流读取异常，准备退回灵犀", {
+            error: (err as Error).message,
+            resultId: result.id,
+            lingxiCost,
+            partialLength: fullResponse.length,
+          });
+          try {
+            await prisma.result.update({
+              where: { id: result.id },
+              data: { lingxi: { increment: lingxiCost } },
+            });
+            logger.info("AI 流中断，灵犀已退回", { resultId: result.id, lingxiCost });
+          } catch (refundErr) {
+            logger.error("AI 流中断后灵犀退回失败", { error: (refundErr as Error).message, resultId: result.id });
+          }
+          controller.error(err);
+        } finally {
+          reader.releaseLock();
         }
       },
     });
 
-    aiStream.pipeTo(transformStream.writable).catch((err) => {
-      logger.error("AI 流管道异常", { error: (err as Error).message });
-    });
-
-    return new Response(transformStream.readable, {
+    return new Response(readable, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "X-Lingxi-Cost": String(lingxiCost),
